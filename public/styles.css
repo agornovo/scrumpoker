@@ -320,34 +320,35 @@ header h1 {
 .card-button {
   aspect-ratio: 2/3;
   min-height: 100px;
-  background: white;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  background: #0000CC;
+  border: 3px solid white;
+  border-radius: 12px;
   font-size: 1.5rem;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s;
-  color: var(--dark-text);
+  color: white;
   box-shadow: var(--shadow);
 }
 
 .card-button:hover {
-  border-color: var(--primary-color);
+  background: #0000FF;
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
 }
 
 .card-button.selected {
-  background: var(--primary-color);
+  background: #0000FF;
   color: white;
-  border-color: var(--primary-color);
+  border-color: #FFD700;
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
 }
 
 .card-button.card-special {
-  background: var(--light-bg);
-  color: var(--secondary-color);
+  background: #0000CC;
+  color: white;
+  border: 3px solid white;
 }
 
 .statistics {
