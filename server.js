@@ -173,7 +173,7 @@ io.on('connection', (socket) => {
   }
 });
 
-// Cleanup old rooms periodically (rooms older than 24 hours)
+// Cleanup empty rooms older than 24 hours periodically
 setInterval(() => {
   const now = new Date();
   const dayInMs = 24 * 60 * 60 * 1000;

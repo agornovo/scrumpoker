@@ -113,10 +113,13 @@ cardButtons.forEach(button => {
     }
 
     // Send vote to server
-    const voteValue = selectedVote === '?' || selectedVote === '☕' ? selectedVote : parseFloat(selectedVote);
+    let voteValue = null;
+    if (selectedVote !== null) {
+      voteValue = selectedVote === '?' || selectedVote === '☕' ? selectedVote : parseFloat(selectedVote);
+    }
     socket.emit('vote', {
       roomId: currentRoomId,
-      vote: selectedVote === null ? null : voteValue
+      vote: voteValue
     });
   });
 });
