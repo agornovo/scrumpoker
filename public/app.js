@@ -109,6 +109,11 @@ cardButtons.forEach(button => {
       
       // Set new selection
       selectedVote = value;
+      
+      // Remove and re-add class to restart animation
+      button.classList.remove('selected');
+      // Force reflow to restart animation
+      void button.offsetWidth;
       button.classList.add('selected');
     }
 
