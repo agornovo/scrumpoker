@@ -2,6 +2,14 @@
 
 A real-time networked scrum poker application for agile teams to estimate user stories collaboratively.
 
+## Screenshots
+
+### Card Selection Screen
+![Card Selection](https://github.com/user-attachments/assets/362892ea-589f-4550-ba36-05040a7ae207)
+
+### Card Selected State
+![Card Selected](https://github.com/user-attachments/assets/8958ed8a-9d15-4065-bec9-b8bca03ffe19)
+
 ## Features
 
 - 🃏 **Real-time Collaboration** - Multiple users can join the same room and vote simultaneously
