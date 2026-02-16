@@ -133,7 +133,7 @@ revealBtn.addEventListener('click', () => {
 resetBtn.addEventListener('click', () => {
   socket.emit('reset', { roomId: currentRoomId });
   
-  // Clear local selection
+  // Clear local selection immediately for responsiveness
   selectedVote = null;
   cardButtons.forEach(btn => btn.classList.remove('selected'));
 });
@@ -205,27 +205,10 @@ socket.on('room-update', (data) => {
   
   // Sync local selection state with server state
   const currentUser = data.users.find(u => u.id === socket.id);
-  if (currentUser) {
-    // If server says we have no vote, clear our local selection
-    if (currentUser.vote === null && selectedVote !== null) {
-      selectedVote = null;
-      cardButtons.forEach(btn => btn.classList.remove('selected'));
-    }
-    // If server says we have a vote and it's revealed or shown as 'voted', ensure correct card is selected
-    else if (currentUser.vote !== null && !data.revealed) {
-      // Make sure the correct card is visually selected (in case of desync)
-      const expectedValue = typeof currentUser.vote === 'number' ? currentUser.vote.toString() : currentUser.vote;
-      if (selectedVote !== expectedValue) {
-        cardButtons.forEach(btn => {
-          if (btn.dataset.value === expectedValue) {
-            btn.classList.add('selected');
-          } else {
-            btn.classList.remove('selected');
-          }
-        });
-        selectedVote = expectedValue;
-      }
-    }
+  if (currentUser && currentUser.vote === null && selectedVote !== null) {
+    // Server confirms we have no vote, clear local selection
+    selectedVote = null;
+    cardButtons.forEach(btn => btn.classList.remove('selected'));
   }
 });
 

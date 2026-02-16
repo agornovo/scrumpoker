@@ -96,16 +96,23 @@ test.describe('Scrum Poker Application', () => {
     await page.click('#join-btn');
     
     const card = page.locator('.card-button[data-value="8"]');
+    const participantVote = page.locator('.participant-vote').first();
+    
+    // Initially should show "..."
+    await expect(participantVote).toContainText('...');
     
     // First click - select
     await card.click();
     await expect(card).toHaveClass(/selected/);
     
-    // Wait a moment to ensure server processes the vote
-    await page.waitForTimeout(200);
+    // Should show checkmark after voting
+    await expect(participantVote).toContainText('✓');
     
     // Second click - deselect
     await card.click();
+    
+    // Should go back to "..." after deselecting
+    await expect(participantVote).toContainText('...');
     await expect(card).not.toHaveClass(/selected/);
   });
 
