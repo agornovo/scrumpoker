@@ -109,11 +109,6 @@ cardButtons.forEach(button => {
       
       // Set new selection
       selectedVote = value;
-      
-      // Remove and re-add class to restart animation
-      button.classList.remove('selected');
-      // Force reflow to restart animation
-      void button.offsetWidth;
       button.classList.add('selected');
     }
 
@@ -207,6 +202,31 @@ socket.on('room-update', (data) => {
   const hasVotes = data.users.some(u => !u.isObserver && u.vote !== null);
   revealBtn.disabled = !hasVotes || data.revealed;
   resetBtn.disabled = !data.revealed;
+  
+  // Sync local selection state with server state
+  const currentUser = data.users.find(u => u.id === socket.id);
+  if (currentUser) {
+    // If server says we have no vote, clear our local selection
+    if (currentUser.vote === null && selectedVote !== null) {
+      selectedVote = null;
+      cardButtons.forEach(btn => btn.classList.remove('selected'));
+    }
+    // If server says we have a vote and it's revealed or shown as 'voted', ensure correct card is selected
+    else if (currentUser.vote !== null && !data.revealed) {
+      // Make sure the correct card is visually selected (in case of desync)
+      const expectedValue = typeof currentUser.vote === 'number' ? currentUser.vote.toString() : currentUser.vote;
+      if (selectedVote !== expectedValue) {
+        cardButtons.forEach(btn => {
+          if (btn.dataset.value === expectedValue) {
+            btn.classList.add('selected');
+          } else {
+            btn.classList.remove('selected');
+          }
+        });
+        selectedVote = expectedValue;
+      }
+    }
+  }
 });
 
 // Connection status
