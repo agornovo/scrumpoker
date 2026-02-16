@@ -109,11 +109,6 @@ cardButtons.forEach(button => {
       
       // Set new selection
       selectedVote = value;
-      
-      // Remove and re-add class to restart animation
-      button.classList.remove('selected');
-      // Force reflow to restart animation
-      void button.offsetWidth;
       button.classList.add('selected');
     }
 
@@ -138,7 +133,7 @@ revealBtn.addEventListener('click', () => {
 resetBtn.addEventListener('click', () => {
   socket.emit('reset', { roomId: currentRoomId });
   
-  // Clear local selection
+  // Clear local selection immediately for responsiveness
   selectedVote = null;
   cardButtons.forEach(btn => btn.classList.remove('selected'));
 });
@@ -207,6 +202,14 @@ socket.on('room-update', (data) => {
   const hasVotes = data.users.some(u => !u.isObserver && u.vote !== null);
   revealBtn.disabled = !hasVotes || data.revealed;
   resetBtn.disabled = !data.revealed;
+  
+  // Sync local selection state with server state
+  const currentUser = data.users.find(u => u.id === socket.id);
+  if (currentUser && currentUser.vote === null && selectedVote !== null) {
+    // Server confirms we have no vote, clear local selection
+    selectedVote = null;
+    cardButtons.forEach(btn => btn.classList.remove('selected'));
+  }
 });
 
 // Connection status

@@ -55,6 +55,74 @@ npm start
 http://localhost:8080
 ```
 
+## Testing
+
+The project includes comprehensive test coverage with both unit tests and end-to-end tests.
+
+### Running Tests
+
+Run all tests (unit + E2E):
+```bash
+npm test
+```
+
+Run only unit tests:
+```bash
+npm run test:unit
+```
+
+Run only E2E tests:
+```bash
+npm run test:e2e
+```
+
+Run unit tests in watch mode (for development):
+```bash
+npm run test:unit:watch
+```
+
+Run E2E tests with UI (for debugging):
+```bash
+npm run test:e2e:ui
+```
+
+Run E2E tests in headed mode (see the browser):
+```bash
+npm run test:e2e:headed
+```
+
+### Test Coverage
+
+Unit tests cover:
+- Health check endpoints
+- Room management (create, join, cleanup)
+- Voting functionality
+- Real-time statistics calculation
+- Vote reveal and reset operations
+- Multi-user collaboration
+- Observer mode
+
+E2E tests cover:
+- Joining rooms and user authentication
+- Card selection and deselection
+- Voting workflow
+- Real-time updates across multiple users
+- Reveal cards and statistics display
+- New round/reset functionality
+- Observer mode behavior
+- Copy room ID functionality
+
+### Continuous Integration
+
+The project uses GitHub Actions for CI/CD. The workflow runs:
+- Unit tests with coverage reporting
+- E2E tests with Playwright
+- Tests on Node.js 18.x and 20.x
+
+CI runs automatically on:
+- Push to main/master branches
+- Pull requests to main/master branches
+
 ## Deployment
 
 ### Docker

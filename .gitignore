@@ -3,3 +3,7 @@ npm-debug.log
 .DS_Store
 .env
 *.log
+coverage/
+playwright-report/
+test-results/
+.playwright/
