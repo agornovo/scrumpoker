@@ -66,6 +66,9 @@ function createTestServer() {
       const room = rooms.get(roomId);
       if (!room) return;
       
+      // Only the room creator can reveal cards
+      if (socket.id !== room.creatorId) return;
+      
       room.revealed = true;
       emitRoomUpdate(roomId);
     });
@@ -73,6 +76,9 @@ function createTestServer() {
     socket.on('reset', ({ roomId }) => {
       const room = rooms.get(roomId);
       if (!room) return;
+      
+      // Only the room creator can reset votes
+      if (socket.id !== room.creatorId) return;
       
       room.revealed = false;
       room.users.forEach(user => {
@@ -861,6 +867,222 @@ describe('Remove Participant', () => {
       userName: 'Creator',
       isObserver: false
     });
+  });
+});
+
+describe('Reveal and Reset Authorization', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+  
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+  
+  afterEach((done) => {
+    server.close(() => {
+      done();
+    });
+  });
+  
+  test('only room creator should be able to reveal cards', (done) => {
+    const creator = Client(serverUrl);
+    const participant = Client(serverUrl);
+    
+    let joinCount = 0;
+    let revealReceived = false;
+    
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Both users have joined, now vote
+        creator.emit('vote', { roomId: 'REVEAL_AUTH', vote: 5 });
+        participant.emit('vote', { roomId: 'REVEAL_AUTH', vote: 8 });
+        
+        setTimeout(() => {
+          // Participant tries to reveal (should fail)
+          participant.emit('reveal', { roomId: 'REVEAL_AUTH' });
+          
+          // Wait and verify cards are NOT revealed
+          setTimeout(() => {
+            const room = rooms.get('REVEAL_AUTH');
+            expect(room.revealed).toBe(false);
+            
+            // Now creator reveals (should succeed)
+            creator.emit('reveal', { roomId: 'REVEAL_AUTH' });
+          }, 200);
+        }, 100);
+      }
+    };
+    
+    creator.on('room-update', (data) => {
+      if (!revealReceived && data.revealed) {
+        // Cards should now be revealed by creator
+        revealReceived = true;
+        expect(data.revealed).toBe(true);
+        creator.disconnect();
+        participant.disconnect();
+        done();
+      } else if (joinCount < 2) {
+        handleJoin();
+      }
+    });
+    
+    participant.on('room-update', handleJoin);
+    
+    creator.emit('join-room', { roomId: 'REVEAL_AUTH', userName: 'Creator', isObserver: false });
+    participant.emit('join-room', { roomId: 'REVEAL_AUTH', userName: 'Participant', isObserver: false });
+  });
+  
+  test('only room creator should be able to reset votes', (done) => {
+    const creator = Client(serverUrl);
+    const participant = Client(serverUrl);
+    
+    let joinCount = 0;
+    let votesDone = false;
+    let revealDone = false;
+    let unauthorizedResetAttempted = false;
+    
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2 && !votesDone) {
+        // Both users have joined, vote and reveal
+        votesDone = true;
+        creator.emit('vote', { roomId: 'RESET_AUTH', vote: 5 });
+        participant.emit('vote', { roomId: 'RESET_AUTH', vote: 8 });
+        
+        setTimeout(() => {
+          creator.emit('reveal', { roomId: 'RESET_AUTH' });
+        }, 100);
+      }
+    };
+    
+    creator.on('room-update', (data) => {
+      if (joinCount < 2) {
+        handleJoin();
+      } else if (data.revealed && !revealDone) {
+        // Cards are revealed, participant tries to reset (should fail)
+        revealDone = true;
+        participant.emit('reset', { roomId: 'RESET_AUTH' });
+        
+        // Wait and verify votes are NOT reset
+        setTimeout(() => {
+          const room = rooms.get('RESET_AUTH');
+          expect(room.revealed).toBe(true);
+          unauthorizedResetAttempted = true;
+          
+          // Now creator resets (should succeed)
+          creator.emit('reset', { roomId: 'RESET_AUTH' });
+        }, 200);
+      } else if (!data.revealed && unauthorizedResetAttempted) {
+        // Votes should now be reset by creator
+        expect(data.revealed).toBe(false);
+        expect(data.users.every(u => u.vote === null)).toBe(true);
+        creator.disconnect();
+        participant.disconnect();
+        done();
+      }
+    });
+    
+    participant.on('room-update', handleJoin);
+    
+    creator.emit('join-room', { roomId: 'RESET_AUTH', userName: 'Creator', isObserver: false });
+    participant.emit('join-room', { roomId: 'RESET_AUTH', userName: 'Participant', isObserver: false });
+  });
+  
+  test('room creator who is an observer should be able to reveal cards', (done) => {
+    const creatorObserver = Client(serverUrl);
+    const participant = Client(serverUrl);
+    
+    let joinCount = 0;
+    let revealReceived = false;
+    
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Both users have joined, participant votes
+        participant.emit('vote', { roomId: 'OBSERVER_CREATOR', vote: 5 });
+        
+        setTimeout(() => {
+          // Creator observer reveals (should succeed)
+          creatorObserver.emit('reveal', { roomId: 'OBSERVER_CREATOR' });
+        }, 100);
+      }
+    };
+    
+    creatorObserver.on('room-update', (data) => {
+      if (!revealReceived && data.revealed) {
+        // Cards should be revealed by creator observer
+        revealReceived = true;
+        expect(data.revealed).toBe(true);
+        creatorObserver.disconnect();
+        participant.disconnect();
+        done();
+      } else if (joinCount < 2) {
+        handleJoin();
+      }
+    });
+    
+    participant.on('room-update', handleJoin);
+    
+    creatorObserver.emit('join-room', { roomId: 'OBSERVER_CREATOR', userName: 'CreatorObserver', isObserver: true });
+    participant.emit('join-room', { roomId: 'OBSERVER_CREATOR', userName: 'Participant', isObserver: false });
+  });
+  
+  test('room creator who is an observer should be able to reset votes', (done) => {
+    const creatorObserver = Client(serverUrl);
+    const participant = Client(serverUrl);
+    
+    let joinCount = 0;
+    let votesDone = false;
+    let revealDone = false;
+    
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2 && !votesDone) {
+        // Both users have joined, participant votes
+        votesDone = true;
+        participant.emit('vote', { roomId: 'OBSERVER_RESET', vote: 5 });
+        
+        setTimeout(() => {
+          // Creator observer reveals
+          creatorObserver.emit('reveal', { roomId: 'OBSERVER_RESET' });
+        }, 100);
+      }
+    };
+    
+    creatorObserver.on('room-update', (data) => {
+      if (joinCount < 2) {
+        handleJoin();
+      } else if (data.revealed && !revealDone) {
+        // Cards revealed, creator observer resets
+        revealDone = true;
+        creatorObserver.emit('reset', { roomId: 'OBSERVER_RESET' });
+      } else if (!data.revealed && revealDone) {
+        // Votes should be reset by creator observer
+        expect(data.revealed).toBe(false);
+        expect(data.users.every(u => u.vote === null)).toBe(true);
+        creatorObserver.disconnect();
+        participant.disconnect();
+        done();
+      }
+    });
+    
+    participant.on('room-update', handleJoin);
+    
+    creatorObserver.emit('join-room', { roomId: 'OBSERVER_RESET', userName: 'CreatorObserver', isObserver: true });
+    participant.emit('join-room', { roomId: 'OBSERVER_RESET', userName: 'Participant', isObserver: false });
   });
 });
 
