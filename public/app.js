@@ -73,16 +73,18 @@ copyRoomIdBtn.addEventListener('click', async () => {
       // Fallback for browsers that don't support clipboard API (Safari/older browsers)
       const textArea = document.createElement('textarea');
       textArea.value = currentRoomId;
-      textArea.style.position = 'fixed';
+      textArea.style.position = 'absolute';
       textArea.style.left = '-999999px';
       textArea.style.top = '-999999px';
+      textArea.style.opacity = '0';
+      textArea.setAttribute('aria-hidden', 'true');
       document.body.appendChild(textArea);
       textArea.focus();
       textArea.select();
       try {
         const successful = document.execCommand('copy');
         if (!successful) {
-          throw new Error('execCommand copy failed');
+          throw new Error('Failed to copy room ID using execCommand');
         }
       } finally {
         document.body.removeChild(textArea);
