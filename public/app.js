@@ -66,13 +66,39 @@ joinBtn.addEventListener('click', () => {
 // Copy room ID to clipboard
 copyRoomIdBtn.addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(currentRoomId);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(currentRoomId);
+    } else {
+      // Fallback for browsers that don't support clipboard API (Safari/older browsers)
+      const textArea = document.createElement('textarea');
+      textArea.value = currentRoomId;
+      textArea.style.position = 'absolute';
+      textArea.style.left = '-9999px';
+      textArea.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        const successful = document.execCommand('copy');
+        if (!successful) {
+          throw new Error('Failed to copy room ID using execCommand');
+        }
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    }
     copyRoomIdBtn.textContent = '✓';
     setTimeout(() => {
       copyRoomIdBtn.textContent = '📋';
     }, 2000);
   } catch (err) {
     console.error('Failed to copy:', err);
+    // Show error to user
+    copyRoomIdBtn.textContent = '✗';
+    setTimeout(() => {
+      copyRoomIdBtn.textContent = '📋';
+    }, 2000);
   }
 });
 
