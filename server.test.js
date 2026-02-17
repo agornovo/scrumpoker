@@ -759,4 +759,73 @@ describe('Multi-User Room Capacity', () => {
       });
     }
   }, 30000);
+  
+  test('should not disconnect existing users when new users join', (done) => {
+    const roomId = 'NODISCONNECT';
+    const clients = [];
+    let disconnectionOccurred = false;
+    
+    // Create first 5 clients
+    const createClients = (count, startIndex, callback) => {
+      let connected = 0;
+      for (let i = startIndex; i < startIndex + count; i++) {
+        const client = Client(serverUrl);
+        clients.push(client);
+        
+        // Monitor disconnections
+        client.on('disconnect', (reason) => {
+          if (reason !== 'io client disconnect') {
+            // Unexpected disconnection
+            console.log(`Client ${i} unexpectedly disconnected: ${reason}`);
+            disconnectionOccurred = true;
+          }
+        });
+        
+        client.on('connect', () => {
+          client.emit('join-room', {
+            roomId: roomId,
+            userName: `User${i + 1}`,
+            isObserver: false
+          });
+          connected++;
+          if (connected === count) {
+            callback();
+          }
+        });
+      }
+    };
+    
+    // First batch: 5 users
+    createClients(5, 0, () => {
+      setTimeout(() => {
+        // Second batch: 10 more users (total 15)
+        createClients(10, 5, () => {
+          setTimeout(() => {
+            // Third batch: 5 more users (total 20)
+            createClients(5, 15, () => {
+              setTimeout(() => {
+                // Verify no disconnections occurred
+                expect(disconnectionOccurred).toBe(false);
+                
+                // Verify all clients are still connected
+                let connectedCount = 0;
+                clients.forEach(c => {
+                  if (c.connected) connectedCount++;
+                });
+                expect(connectedCount).toBe(20);
+                
+                // Verify room has all users
+                const room = rooms.get(roomId);
+                expect(room.users.size).toBe(20);
+                
+                // Cleanup
+                clients.forEach(c => c.disconnect());
+                done();
+              }, 500);
+            });
+          }, 500);
+        });
+      }, 500);
+    });
+  }, 30000);
 });

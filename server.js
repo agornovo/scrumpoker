@@ -5,7 +5,21 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+  // Configure for supporting up to 20+ users per room
+  maxHttpBufferSize: 1e6, // 1MB (default, but being explicit)
+  pingTimeout: 60000, // 60 seconds (increased from default 20s for reliability)
+  pingInterval: 25000, // 25 seconds (default, but being explicit)
+  connectTimeout: 45000, // 45 seconds (default)
+  cors: {
+    origin: "*", // Allow all origins for development/testing
+    methods: ["GET", "POST"]
+  }
+});
+
+// Increase max listeners to support rooms with many users
+// Each user in a room adds listeners for events
+io.setMaxListeners(50); // Support up to 50 listeners (well above 20 users)
 
 const PORT = process.env.PORT || 8080;
 
