@@ -33,7 +33,8 @@ function createTestServer() {
           id: roomId,
           users: new Map(),
           revealed: false,
-          createdAt: new Date()
+          createdAt: new Date(),
+          creatorId: socket.id
         });
       }
       
@@ -78,6 +79,27 @@ function createTestServer() {
         user.vote = null;
       });
       emitRoomUpdate(roomId);
+    });
+    
+    socket.on('remove-participant', ({ roomId, participantId }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+      
+      if (socket.id !== room.creatorId) return;
+      if (participantId === socket.id) return;
+      
+      if (room.users.has(participantId)) {
+        room.users.delete(participantId);
+        
+        const targetSocket = io.sockets.sockets.get(participantId);
+        if (targetSocket) {
+          targetSocket.emit('removed-from-room', { roomId });
+          targetSocket.leave(roomId);
+          targetSocket.roomId = null;
+        }
+        
+        emitRoomUpdate(roomId);
+      }
     });
     
     socket.on('disconnect', () => {
@@ -134,7 +156,8 @@ function createTestServer() {
         roomId,
         users,
         revealed: room.revealed,
-        stats
+        stats,
+        creatorId: room.creatorId
       });
     }
   });
@@ -674,6 +697,171 @@ describe('Room Cleanup', () => {
     
     client1.emit('join-room', { roomId: 'KEEPROOM', userName: 'User1', isObserver: false });
     client2.emit('join-room', { roomId: 'KEEPROOM', userName: 'User2', isObserver: false });
+  });
+});
+
+describe('Remove Participant', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+  
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+  
+  afterEach((done) => {
+    server.close(() => {
+      done();
+    });
+  });
+  
+  test('room creator should be tracked correctly', (done) => {
+    const creator = Client(serverUrl);
+    
+    creator.on('room-update', (data) => {
+      expect(data.creatorId).toBeDefined();
+      expect(data.creatorId).toBe(creator.id);
+      creator.disconnect();
+      done();
+    });
+    
+    creator.emit('join-room', {
+      roomId: 'CREATOR_TEST',
+      userName: 'Creator',
+      isObserver: false
+    });
+  });
+  
+  test('room creator should be able to remove other participants', (done) => {
+    const creator = Client(serverUrl);
+    const participant = Client(serverUrl);
+    
+    let creatorUpdateCount = 0;
+    let participantRemoved = false;
+    
+    creator.on('room-update', (data) => {
+      creatorUpdateCount++;
+      
+      if (creatorUpdateCount === 2) {
+        // Both users have joined
+        expect(data.users).toHaveLength(2);
+        
+        // Creator removes the participant
+        const participantId = data.users.find(u => u.name === 'Participant').id;
+        creator.emit('remove-participant', {
+          roomId: 'REMOVE_TEST',
+          participantId: participantId
+        });
+      } else if (creatorUpdateCount === 3) {
+        // Participant should be removed
+        expect(data.users).toHaveLength(1);
+        expect(data.users[0].name).toBe('Creator');
+        expect(participantRemoved).toBe(true);
+        creator.disconnect();
+        done();
+      }
+    });
+    
+    participant.on('removed-from-room', (data) => {
+      expect(data.roomId).toBe('REMOVE_TEST');
+      participantRemoved = true;
+      participant.disconnect();
+    });
+    
+    creator.emit('join-room', {
+      roomId: 'REMOVE_TEST',
+      userName: 'Creator',
+      isObserver: false
+    });
+    
+    setTimeout(() => {
+      participant.emit('join-room', {
+        roomId: 'REMOVE_TEST',
+        userName: 'Participant',
+        isObserver: false
+      });
+    }, 100);
+  });
+  
+  test('non-creator should not be able to remove participants', (done) => {
+    const creator = Client(serverUrl);
+    const participant1 = Client(serverUrl);
+    const participant2 = Client(serverUrl);
+    
+    let usersJoined = 0;
+    
+    creator.on('room-update', (data) => {
+      if (data.users.length === 3 && usersJoined === 3) {
+        // All three have joined, now participant1 tries to remove participant2 (should fail)
+        const participant2Id = data.users.find(u => u.name === 'Participant2').id;
+        participant1.emit('remove-participant', {
+          roomId: 'AUTH_TEST',
+          participantId: participant2Id
+        });
+        
+        // Wait and verify participant2 is still in the room
+        setTimeout(() => {
+          const room = rooms.get('AUTH_TEST');
+          expect(room.users.size).toBe(3);
+          creator.disconnect();
+          participant1.disconnect();
+          participant2.disconnect();
+          done();
+        }, 200);
+      }
+    });
+    
+    creator.emit('join-room', { roomId: 'AUTH_TEST', userName: 'Creator', isObserver: false });
+    usersJoined++;
+    
+    setTimeout(() => {
+      participant1.emit('join-room', { roomId: 'AUTH_TEST', userName: 'Participant1', isObserver: false });
+      usersJoined++;
+    }, 50);
+    
+    setTimeout(() => {
+      participant2.emit('join-room', { roomId: 'AUTH_TEST', userName: 'Participant2', isObserver: false });
+      usersJoined++;
+    }, 100);
+  });
+  
+  test('room creator should not be able to remove themselves', (done) => {
+    const creator = Client(serverUrl);
+    
+    creator.on('room-update', (data) => {
+      expect(data.users).toHaveLength(1);
+      
+      // Try to remove self (should fail)
+      creator.emit('remove-participant', {
+        roomId: 'SELF_REMOVE_TEST',
+        participantId: creator.id
+      });
+      
+      // Wait and verify creator is still in the room
+      setTimeout(() => {
+        const room = rooms.get('SELF_REMOVE_TEST');
+        expect(room.users.size).toBe(1);
+        creator.disconnect();
+        done();
+      }, 200);
+    });
+    
+    creator.emit('join-room', {
+      roomId: 'SELF_REMOVE_TEST',
+      userName: 'Creator',
+      isObserver: false
+    });
   });
 });
 
