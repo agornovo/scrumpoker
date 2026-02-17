@@ -672,3 +672,91 @@ describe('Room Cleanup', () => {
     client2.emit('join-room', { roomId: 'KEEPROOM', userName: 'User2', isObserver: false });
   });
 });
+
+describe('Multi-User Room Capacity', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+  
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+  
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+  
+  test('should support 20 users in the same room', (done) => {
+    const roomId = 'CAPACITY20';
+    const clients = [];
+    const receivedUpdates = new Map();
+    let joinedCount = 0;
+    
+    const checkComplete = () => {
+      joinedCount++;
+      console.log(`User ${joinedCount} joined`);
+      
+      if (joinedCount === 20) {
+        // All users joined, wait a bit and verify
+        setTimeout(() => {
+          const room = rooms.get(roomId);
+          console.log(`Room has ${room.users.size} users`);
+          expect(room.users.size).toBe(20);
+          
+          // Check that all clients received final update
+          let allClientsHave20 = true;
+          clients.forEach((client, index) => {
+            const updates = receivedUpdates.get(index);
+            if (updates && updates.length > 0) {
+              const lastUpdate = updates[updates.length - 1];
+              console.log(`Client ${index} last update has ${lastUpdate.users.length} users`);
+              if (lastUpdate.users.length !== 20) {
+                allClientsHave20 = false;
+              }
+            } else {
+              allClientsHave20 = false;
+            }
+          });
+          
+          expect(allClientsHave20).toBe(true);
+          
+          // Cleanup
+          clients.forEach(c => c.disconnect());
+          done();
+        }, 1000);
+      }
+    };
+    
+    // Create 20 clients
+    for (let i = 0; i < 20; i++) {
+      const client = Client(serverUrl);
+      clients.push(client);
+      receivedUpdates.set(i, []);
+      
+      client.on('room-update', (data) => {
+        receivedUpdates.get(i).push(data);
+      });
+      
+      client.on('connect', () => {
+        client.emit('join-room', {
+          roomId: roomId,
+          userName: `User${i + 1}`,
+          isObserver: false
+        });
+        checkComplete();
+      });
+    }
+  }, 30000);
+});
