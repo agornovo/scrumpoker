@@ -463,10 +463,7 @@ test.describe('Multi-user Collaboration', () => {
     // Creator clicks remove button
     await removeBtn.click();
     
-    // Wait for removal
-    await page1.waitForTimeout(500);
-    
-    // Creator should now see only 1 participant
+    // Wait for removal - participant count should go to 1
     await expect(page1.locator('#participant-count')).toHaveText('1');
     
     // Removed user should see alert and be back on welcome screen

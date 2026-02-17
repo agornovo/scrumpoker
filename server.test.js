@@ -799,10 +799,12 @@ describe('Remove Participant', () => {
     const participant1 = Client(serverUrl);
     const participant2 = Client(serverUrl);
     
-    let usersJoined = 0;
+    let creatorJoinCount = 0;
     
     creator.on('room-update', (data) => {
-      if (data.users.length === 3 && usersJoined === 3) {
+      creatorJoinCount++;
+      
+      if (data.users.length === 3 && creatorJoinCount === 3) {
         // All three have joined, now participant1 tries to remove participant2 (should fail)
         const participant2Id = data.users.find(u => u.name === 'Participant2').id;
         participant1.emit('remove-participant', {
@@ -823,16 +825,13 @@ describe('Remove Participant', () => {
     });
     
     creator.emit('join-room', { roomId: 'AUTH_TEST', userName: 'Creator', isObserver: false });
-    usersJoined++;
     
     setTimeout(() => {
       participant1.emit('join-room', { roomId: 'AUTH_TEST', userName: 'Participant1', isObserver: false });
-      usersJoined++;
     }, 50);
     
     setTimeout(() => {
       participant2.emit('join-room', { roomId: 'AUTH_TEST', userName: 'Participant2', isObserver: false });
-      usersJoined++;
     }, 100);
   });
   
