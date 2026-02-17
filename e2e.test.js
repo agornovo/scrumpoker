@@ -411,4 +411,70 @@ test.describe('Multi-user Collaboration', () => {
     await context1.close();
     await context2.close();
   });
+
+  test('should allow room creator to remove participants', async ({ browser }) => {
+    const roomId = 'REMOVETEST';
+    
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+    
+    // Creator joins first
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Creator');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+    
+    // Second user joins
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+    
+    // Both should see 2 participants
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+    await expect(page2.locator('#participant-count')).toHaveText('2');
+    
+    // Creator should see remove button on participant's card
+    const participantCard = page1.locator('.participant-card').filter({ hasText: 'Participant' });
+    const removeBtn = participantCard.locator('.remove-participant-btn');
+    await expect(removeBtn).toBeVisible();
+    
+    // Non-creator should NOT see remove button on creator's card
+    const creatorCard = page2.locator('.participant-card').filter({ hasText: 'Creator' });
+    const removeBtnOnPage2 = creatorCard.locator('.remove-participant-btn');
+    await expect(removeBtnOnPage2).not.toBeVisible();
+    
+    // Setup dialog handler for confirmation
+    page1.on('dialog', async dialog => {
+      expect(dialog.message()).toContain('Remove Participant');
+      await dialog.accept();
+    });
+    
+    // Setup alert handler for removed user
+    let alertMessage = '';
+    page2.on('dialog', async dialog => {
+      alertMessage = dialog.message();
+      await dialog.accept();
+    });
+    
+    // Creator clicks remove button
+    await removeBtn.click();
+    
+    // Wait for removal
+    await page1.waitForTimeout(500);
+    
+    // Creator should now see only 1 participant
+    await expect(page1.locator('#participant-count')).toHaveText('1');
+    
+    // Removed user should see alert and be back on welcome screen
+    expect(alertMessage).toContain('removed from the room');
+    await expect(page2.locator('#welcome-screen')).not.toHaveClass(/hidden/);
+    await expect(page2.locator('#voting-screen')).toHaveClass(/hidden/);
+    
+    await context1.close();
+    await context2.close();
+  });
 });
