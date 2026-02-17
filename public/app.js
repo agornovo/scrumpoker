@@ -227,6 +227,14 @@ socket.on('room-update', (data) => {
       card.appendChild(badge);
     }
 
+    // Add host badge for the room creator
+    if (user.id === data.creatorId) {
+      const hostBadge = document.createElement('div');
+      hostBadge.className = 'participant-badge host';
+      hostBadge.textContent = 'Host';
+      card.appendChild(hostBadge);
+    }
+
     participantsList.appendChild(card);
   });
 
