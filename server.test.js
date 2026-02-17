@@ -67,7 +67,10 @@ function createTestServer() {
       if (!room) return;
       
       // Only the room creator can reveal cards
-      if (socket.id !== room.creatorId) return;
+      if (socket.id !== room.creatorId) {
+        console.log(`Unauthorized reveal attempt by ${socket.id} in room ${roomId}`);
+        return;
+      }
       
       room.revealed = true;
       emitRoomUpdate(roomId);
@@ -78,7 +81,10 @@ function createTestServer() {
       if (!room) return;
       
       // Only the room creator can reset votes
-      if (socket.id !== room.creatorId) return;
+      if (socket.id !== room.creatorId) {
+        console.log(`Unauthorized reset attempt by ${socket.id} in room ${roomId}`);
+        return;
+      }
       
       room.revealed = false;
       room.users.forEach(user => {
