@@ -12,13 +12,15 @@ const io = socketIo(server, {
   pingInterval: 25000, // 25 seconds (default, but being explicit)
   connectTimeout: 45000, // 45 seconds (default)
   cors: {
-    origin: "*", // Allow all origins for development/testing
+    // In production, this should be restricted to specific allowed origins
+    origin: process.env.CORS_ORIGIN || "*",
     methods: ["GET", "POST"]
   }
 });
 
 // Increase max listeners to support rooms with many users
-// Each user in a room adds listeners for events
+// This applies to the Socket.IO server instance and prevents EventEmitter warnings
+// when broadcasting to rooms with 20+ concurrent users
 io.setMaxListeners(50); // Support up to 50 listeners (well above 20 users)
 
 const PORT = process.env.PORT || 8080;

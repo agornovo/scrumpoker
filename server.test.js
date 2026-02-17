@@ -4,6 +4,10 @@ const http = require('http');
 const socketIo = require('socket.io');
 const { io: Client } = require('socket.io-client');
 
+// Test timing constants
+const VERIFICATION_DELAY_MS = 1000; // Time to wait for all clients to receive final updates
+const BATCH_JOIN_DELAY_MS = 500; // Time between batches of users joining
+
 // Create a test server for each test
 function createTestServer() {
   const app = express();
@@ -706,13 +710,11 @@ describe('Multi-User Room Capacity', () => {
     
     const checkComplete = () => {
       joinedCount++;
-      console.log(`User ${joinedCount} joined`);
       
       if (joinedCount === 20) {
         // All users joined, wait a bit and verify
         setTimeout(() => {
           const room = rooms.get(roomId);
-          console.log(`Room has ${room.users.size} users`);
           expect(room.users.size).toBe(20);
           
           // Check that all clients received final update
@@ -721,7 +723,6 @@ describe('Multi-User Room Capacity', () => {
             const updates = receivedUpdates.get(index);
             if (updates && updates.length > 0) {
               const lastUpdate = updates[updates.length - 1];
-              console.log(`Client ${index} last update has ${lastUpdate.users.length} users`);
               if (lastUpdate.users.length !== 20) {
                 allClientsHave20 = false;
               }
@@ -735,7 +736,7 @@ describe('Multi-User Room Capacity', () => {
           // Cleanup
           clients.forEach(c => c.disconnect());
           done();
-        }, 1000);
+        }, VERIFICATION_DELAY_MS);
       }
     };
     
@@ -776,7 +777,6 @@ describe('Multi-User Room Capacity', () => {
         client.on('disconnect', (reason) => {
           if (reason !== 'io client disconnect') {
             // Unexpected disconnection
-            console.log(`Client ${i} unexpectedly disconnected: ${reason}`);
             disconnectionOccurred = true;
           }
         });
@@ -821,11 +821,11 @@ describe('Multi-User Room Capacity', () => {
                 // Cleanup
                 clients.forEach(c => c.disconnect());
                 done();
-              }, 500);
+              }, BATCH_JOIN_DELAY_MS);
             });
-          }, 500);
+          }, BATCH_JOIN_DELAY_MS);
         });
-      }, 500);
+      }, BATCH_JOIN_DELAY_MS);
     });
   }, 30000);
 });
