@@ -243,8 +243,20 @@ socket.on('room-update', (data) => {
 
   // Update button states
   const hasVotes = data.users.some(u => !u.isObserver && u.vote !== null);
-  revealBtn.disabled = !hasVotes || data.revealed;
-  resetBtn.disabled = !data.revealed;
+  const isCreator = data.creatorId === socket.id;
+  
+  // Only the room creator can reveal and reset
+  if (!isCreator) {
+    revealBtn.disabled = true;
+    resetBtn.disabled = true;
+    revealBtn.title = 'Only the room creator can reveal cards';
+    resetBtn.title = 'Only the room creator can start a new round';
+  } else {
+    revealBtn.disabled = !hasVotes || data.revealed;
+    resetBtn.disabled = !data.revealed;
+    revealBtn.title = '';
+    resetBtn.title = '';
+  }
   
   // Sync local selection state with server state
   const currentUser = data.users.find(u => u.id === socket.id);

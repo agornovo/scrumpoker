@@ -101,10 +101,16 @@ io.on('connection', (socket) => {
     emitRoomUpdate(roomId);
   });
 
-  // Reveal cards
+  // Reveal cards (only room creator can do this)
   socket.on('reveal', ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room) return;
+
+    // Only the room creator can reveal cards
+    if (socket.id !== room.creatorId) {
+      console.log(`Unauthorized reveal attempt by ${socket.id} in room ${roomId}`);
+      return;
+    }
 
     room.revealed = true;
     console.log(`Cards revealed in room ${roomId}`);
@@ -112,10 +118,16 @@ io.on('connection', (socket) => {
     emitRoomUpdate(roomId);
   });
 
-  // Reset votes
+  // Reset votes (only room creator can do this)
   socket.on('reset', ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room) return;
+
+    // Only the room creator can reset votes
+    if (socket.id !== room.creatorId) {
+      console.log(`Unauthorized reset attempt by ${socket.id} in room ${roomId}`);
+      return;
+    }
 
     room.revealed = false;
     room.users.forEach(user => {
