@@ -80,7 +80,10 @@ copyRoomIdBtn.addEventListener('click', async () => {
       textArea.focus();
       textArea.select();
       try {
-        document.execCommand('copy');
+        const successful = document.execCommand('copy');
+        if (!successful) {
+          throw new Error('execCommand copy failed');
+        }
       } finally {
         document.body.removeChild(textArea);
       }
