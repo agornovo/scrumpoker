@@ -45,7 +45,8 @@ const rooms = new Map();
 //   id: string,
 //   users: Map({ socketId: { name: string, vote: number|null, isObserver: boolean } }),
 //   revealed: boolean,
-//   createdAt: Date
+//   createdAt: Date,
+//   creatorId: string (socket ID of room creator)
 // }
 
 io.on('connection', (socket) => {
@@ -59,7 +60,8 @@ io.on('connection', (socket) => {
         id: roomId,
         users: new Map(),
         revealed: false,
-        createdAt: new Date()
+        createdAt: new Date(),
+        creatorId: socket.id // Track the room creator
       });
       console.log('Created room:', roomId);
     }
@@ -124,6 +126,41 @@ io.on('connection', (socket) => {
     emitRoomUpdate(roomId);
   });
 
+  // Remove participant (only room creator can do this)
+  socket.on('remove-participant', ({ roomId, participantId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    // Only the room creator can remove participants
+    if (socket.id !== room.creatorId) {
+      console.log(`Unauthorized remove attempt by ${socket.id} in room ${roomId}`);
+      return;
+    }
+
+    // Cannot remove yourself
+    if (participantId === socket.id) {
+      console.log(`Room creator cannot remove themselves`);
+      return;
+    }
+
+    // Remove the participant
+    if (room.users.has(participantId)) {
+      const removedUser = room.users.get(participantId);
+      room.users.delete(participantId);
+      console.log(`User ${removedUser.name} removed from room ${roomId} by creator`);
+
+      // Disconnect the removed user's socket
+      const targetSocket = io.sockets.sockets.get(participantId);
+      if (targetSocket) {
+        targetSocket.emit('removed-from-room', { roomId });
+        targetSocket.leave(roomId);
+        targetSocket.roomId = null;
+      }
+
+      emitRoomUpdate(roomId);
+    }
+  });
+
   // Disconnect
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
@@ -184,7 +221,8 @@ io.on('connection', (socket) => {
       roomId,
       users,
       revealed: room.revealed,
-      stats
+      stats,
+      creatorId: room.creatorId
     });
   }
 });

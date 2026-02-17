@@ -180,6 +180,23 @@ socket.on('room-update', (data) => {
       card.classList.add('voted');
     }
 
+    // Add remove button if current user is the room creator and this is not their own card
+    if (data.creatorId === socket.id && user.id !== socket.id) {
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-participant-btn';
+      removeBtn.innerHTML = '×';
+      removeBtn.title = 'Remove participant';
+      removeBtn.onclick = () => {
+        if (confirm(`Remove ${user.name} from the room?`)) {
+          socket.emit('remove-participant', {
+            roomId: currentRoomId,
+            participantId: user.id
+          });
+        }
+      };
+      card.appendChild(removeBtn);
+    }
+
     const nameDiv = document.createElement('div');
     nameDiv.className = 'participant-name';
     nameDiv.textContent = user.name;
@@ -236,6 +253,17 @@ socket.on('room-update', (data) => {
     selectedVote = null;
     cardButtons.forEach(btn => btn.classList.remove('selected'));
   }
+});
+
+// Handle being removed from a room
+socket.on('removed-from-room', () => {
+  alert('You have been removed from the room by the room creator.');
+  // Return to welcome screen
+  welcomeScreen.classList.remove('hidden');
+  votingScreen.classList.add('hidden');
+  currentRoomId = null;
+  currentUserName = null;
+  selectedVote = null;
 });
 
 // Connection status
