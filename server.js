@@ -38,13 +38,21 @@ app.get('/ready', (req, res) => {
   res.status(200).json({ status: 'ready' });
 });
 
+// Cache commit info to avoid repeated git command execution
+let cachedCommitInfo = null;
+
 // Get commit info endpoint
 app.get('/api/commit', (req, res) => {
   try {
+    // Return cached result if available
+    if (cachedCommitInfo) {
+      return res.json(cachedCommitInfo);
+    }
+
     // Try to get commit hash from environment variable (set during build)
     let commitHash = process.env.GIT_COMMIT || process.env.COMMIT_SHA;
     
-    // If not available, try to get it from git
+    // If not available, try to get it from git (only once, then cached)
     if (!commitHash) {
       try {
         commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 5000 }).trim();
@@ -54,11 +62,14 @@ app.get('/api/commit', (req, res) => {
       }
     }
     
-    res.json({
+    // Cache the result
+    cachedCommitInfo = {
       hash: commitHash,
       shortHash: commitHash ? commitHash.substring(0, 7) : null,
       repository: 'https://github.com/agornovo/scrumpoker'
-    });
+    };
+
+    res.json(cachedCommitInfo);
   } catch (error) {
     res.status(500).json({ error: 'Unable to retrieve commit info' });
   }
