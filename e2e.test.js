@@ -15,6 +15,22 @@ test.describe('Scrum Poker Application', () => {
     await expect(page.locator('#join-btn')).toBeVisible();
   });
 
+  test('should toggle between light and dark themes', async ({ page }) => {
+    const html = page.locator('html');
+    const initialTheme = await html.getAttribute('data-theme');
+    const nextTheme = initialTheme === 'dark' ? 'light' : 'dark';
+    await page.click('#theme-toggle');
+    await expect(html).toHaveAttribute('data-theme', nextTheme);
+  });
+
+  test('should show help content for estimation guidance', async ({ page }) => {
+    await expect(page.locator('#help-title')).toContainText('How Scrum Poker helps your team');
+    await expect(page.locator('.help-section')).toContainText('How to use the app');
+    await expect(page.locator('.help-section')).toContainText('Purpose of Scrum Poker');
+    await expect(page.locator('.help-section')).toContainText('Why Fibonacci numbers');
+    await expect(page.locator('.help-section')).toContainText('Why estimate with story points');
+  });
+
   test('should join a room with a name', async ({ page }) => {
     // Fill in user name
     await page.fill('#user-name', 'Alice');

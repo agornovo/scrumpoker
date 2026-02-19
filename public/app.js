@@ -4,6 +4,7 @@ const socket = io();
 // UI Elements
 const welcomeScreen = document.getElementById('welcome-screen');
 const votingScreen = document.getElementById('voting-screen');
+const themeToggleBtn = document.getElementById('theme-toggle');
 const userNameInput = document.getElementById('user-name');
 const roomIdInput = document.getElementById('room-id');
 const isObserverCheckbox = document.getElementById('is-observer');
@@ -28,6 +29,35 @@ let currentRoomId = null;
 let currentUserName = null;
 let isObserver = false;
 let selectedVote = null;
+const THEME_STORAGE_KEY = 'scrumpoker-theme';
+
+function setTheme(theme) {
+  const isDark = theme === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  themeToggleBtn.textContent = isDark ? 'Light theme' : 'Dark theme';
+  themeToggleBtn.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+}
+
+const prefersDarkTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+let savedTheme = null;
+try {
+  savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+} catch (error) {
+  console.warn('Theme preference could not be read:', error);
+  savedTheme = null;
+}
+setTheme(savedTheme || (prefersDarkTheme ? 'dark' : 'light'));
+
+themeToggleBtn.addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const nextTheme = isDark ? 'light' : 'dark';
+  setTheme(nextTheme);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  } catch (error) {
+    console.warn('Theme preference could not be saved:', error);
+  }
+});
 
 // Generate a random room ID
 function generateRoomId() {
