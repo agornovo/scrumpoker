@@ -180,16 +180,19 @@ function createTestServer() {
 describe('Server Health Checks', () => {
   let testServer;
   let server;
+  let io;
   
   beforeEach((done) => {
     testServer = createTestServer();
     server = testServer.server;
+    io = testServer.io;
     server.listen(() => {
       done();
     });
   });
   
   afterEach((done) => {
+    io.close();
     server.close(done);
   });
   
@@ -433,25 +436,12 @@ describe('Socket.IO Reveal and Statistics', () => {
     const client1 = Client(serverUrl);
     const client2 = Client(serverUrl);
     const client3 = Client(serverUrl);
+    const clients = [client1, client2, client3];
     
-    let joinCount = 0;
+    let votingStarted = false;
     let revealReceived = false;
     
-    const handleJoin = () => {
-      joinCount++;
-      if (joinCount === 3) {
-        // All joined, now vote
-        client1.emit('vote', { roomId: 'STATS', vote: 3 });
-        client2.emit('vote', { roomId: 'STATS', vote: 5 });
-        client3.emit('vote', { roomId: 'STATS', vote: 8 });
-        
-        setTimeout(() => {
-          client1.emit('reveal', { roomId: 'STATS' });
-        }, 200);
-      }
-    };
-    
-    client1.on('room-update', (data) => {
+    const onRoomUpdate = (data) => {
       if (!revealReceived && data.revealed && data.stats) {
         revealReceived = true;
         expect(data.revealed).toBe(true);
@@ -464,17 +454,25 @@ describe('Socket.IO Reveal and Statistics', () => {
         const votes = data.users.map(u => u.vote).sort((a, b) => a - b);
         expect(votes).toEqual([3, 5, 8]);
         
-        client1.disconnect();
-        client2.disconnect();
-        client3.disconnect();
+        clients.forEach(c => c.disconnect());
         done();
-      } else if (joinCount < 3) {
-        handleJoin();
+      } else if (!votingStarted && data.users.length === 3) {
+        // All three users joined - start voting using the actual room creator to reveal
+        votingStarted = true;
+        client1.emit('vote', { roomId: 'STATS', vote: 3 });
+        client2.emit('vote', { roomId: 'STATS', vote: 5 });
+        client3.emit('vote', { roomId: 'STATS', vote: 8 });
+        
+        setTimeout(() => {
+          const creator = clients.find(c => c.id === data.creatorId);
+          if (creator) creator.emit('reveal', { roomId: 'STATS' });
+        }, 200);
       }
-    });
+    };
     
-    client2.on('room-update', handleJoin);
-    client3.on('room-update', handleJoin);
+    client1.on('room-update', onRoomUpdate);
+    client2.on('room-update', onRoomUpdate);
+    client3.on('room-update', onRoomUpdate);
     
     client1.emit('join-room', { roomId: 'STATS', userName: 'User1', isObserver: false });
     client2.emit('join-room', { roomId: 'STATS', userName: 'User2', isObserver: false });
@@ -733,9 +731,8 @@ describe('Remove Participant', () => {
   });
   
   afterEach((done) => {
-    server.close(() => {
-      done();
-    });
+    io.close();
+    server.close(done);
   });
   
   test('room creator should be tracked correctly', (done) => {
@@ -897,9 +894,8 @@ describe('Reveal and Reset Authorization', () => {
   });
   
   afterEach((done) => {
-    server.close(() => {
-      done();
-    });
+    io.close();
+    server.close(done);
   });
   
   test('only room creator should be able to reveal cards', (done) => {

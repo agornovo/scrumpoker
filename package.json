@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "jest --coverage",
+    "test:unit": "jest --coverage --forceExit",
     "test:e2e": "playwright test",
     "test:unit:watch": "jest --watch",
     "test:e2e:headed": "playwright test --headed",
