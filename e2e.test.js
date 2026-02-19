@@ -23,6 +23,24 @@ test.describe('Scrum Poker Application', () => {
     await expect(html).toHaveAttribute('data-theme', nextTheme);
   });
 
+  test('should switch color palette', async ({ page }) => {
+    const html = page.locator('html');
+    // Default palette should be set
+    await expect(html).toHaveAttribute('data-palette', /.+/);
+
+    // Switch to forest palette
+    await page.click('.palette-swatch[data-palette="forest"]');
+    await expect(html).toHaveAttribute('data-palette', 'forest');
+    await expect(page.locator('.palette-swatch[data-palette="forest"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.palette-swatch[data-palette="ocean"]')).toHaveAttribute('aria-pressed', 'false');
+
+    // Switch to violet palette
+    await page.click('.palette-swatch[data-palette="violet"]');
+    await expect(html).toHaveAttribute('data-palette', 'violet');
+    await expect(page.locator('.palette-swatch[data-palette="violet"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.palette-swatch[data-palette="forest"]')).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('should show help content for estimation guidance', async ({ page }) => {
     await expect(page.locator('#help-title')).toContainText('How Scrum Poker helps your team');
     await expect(page.locator('.help-section')).toContainText('How to use the app');
