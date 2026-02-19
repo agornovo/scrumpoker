@@ -310,6 +310,10 @@ resetBtn.addEventListener('click', () => {
   selectedVote = null;
   clearCardSelection();
   statistics.classList.add('hidden');
+  statAvg.textContent = '-';
+  statMedian.textContent = '-';
+  statMin.textContent = '-';
+  statMax.textContent = '-';
 
   // Immediately clear participant vote values so the previous round's
   // results are not visible while we wait for the server's room-update
@@ -413,6 +417,10 @@ socket.on('room-update', (data) => {
     statMax.textContent = data.stats.max;
   } else {
     statistics.classList.add('hidden');
+    statAvg.textContent = '-';
+    statMedian.textContent = '-';
+    statMin.textContent = '-';
+    statMax.textContent = '-';
   }
 
   // Update button states

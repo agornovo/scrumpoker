@@ -494,6 +494,12 @@ test.describe('Multi-user Collaboration', () => {
     // Statistics must be hidden immediately on the host's page
     await expect(page1.locator('#statistics')).toHaveClass(/hidden/);
 
+    // Stat values must be reset to '-' (not left with round-1 values)
+    await expect(page1.locator('#stat-avg')).toHaveText('-');
+    await expect(page1.locator('#stat-median')).toHaveText('-');
+    await expect(page1.locator('#stat-min')).toHaveText('-');
+    await expect(page1.locator('#stat-max')).toHaveText('-');
+
     // Participant vote displays must be cleared (no round-1 numbers visible)
     const voteEls1 = page1.locator('.participant-card:not(.observer) .participant-vote');
     const count = await voteEls1.count();
@@ -503,6 +509,12 @@ test.describe('Multi-user Collaboration', () => {
 
     // Statistics also hidden for the other participant after server update
     await expect(page2.locator('#statistics')).toHaveClass(/hidden/);
+
+    // Stat values also reset for the other participant
+    await expect(page2.locator('#stat-avg')).toHaveText('-');
+    await expect(page2.locator('#stat-median')).toHaveText('-');
+    await expect(page2.locator('#stat-min')).toHaveText('-');
+    await expect(page2.locator('#stat-max')).toHaveText('-');
 
     // Screenshot: results cleared after new round (host view)
     await testInfo.attach('new-round-results-cleared-host', {
