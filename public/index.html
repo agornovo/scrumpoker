@@ -50,6 +50,16 @@
           </label>
         </div>
 
+        <div class="form-group">
+          <label for="card-set">Card Set <span class="form-hint">(applies when creating a new room)</span></label>
+          <select id="card-set">
+            <option value="standard">Standard [1, 2, 3, 5, 8, 13, 20, 40, 100, ?]</option>
+            <option value="fibonacci">Fibonacci [0, ½, 1, 2, 3, 5, 8, 13, 21, 34, 55, ?, ☕]</option>
+            <option value="tshirt">T-Shirt Sizes [XS, S, M, L, XL, XXL, ?]</option>
+            <option value="powers2">Powers of 2 [1, 2, 4, 8, 16, 32, 64, ?]</option>
+          </select>
+        </div>
+
         <button id="join-btn" class="btn btn-primary btn-large">Join Room</button>
         
         <div class="help-text">
@@ -99,20 +109,7 @@
       <!-- Card Selection (only shown for non-observers) -->
       <div id="card-selection" class="card-selection">
         <h3>Select Your Card</h3>
-        <div class="cards-container">
-          <button class="card-button" data-value="0">0</button>
-          <button class="card-button" data-value="0.5">½</button>
-          <button class="card-button" data-value="1">1</button>
-          <button class="card-button" data-value="2">2</button>
-          <button class="card-button" data-value="3">3</button>
-          <button class="card-button" data-value="5">5</button>
-          <button class="card-button" data-value="8">8</button>
-          <button class="card-button" data-value="13">13</button>
-          <button class="card-button" data-value="21">21</button>
-          <button class="card-button" data-value="34">34</button>
-          <button class="card-button" data-value="55">55</button>
-          <button class="card-button card-special" data-value="?">?</button>
-          <button class="card-button card-special" data-value="☕">☕</button>
+        <div class="cards-container" id="cards-container">
         </div>
       </div>
 

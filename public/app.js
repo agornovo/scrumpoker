@@ -8,6 +8,7 @@ const themeToggleBtn = document.getElementById('theme-toggle');
 const userNameInput = document.getElementById('user-name');
 const roomIdInput = document.getElementById('room-id');
 const isObserverCheckbox = document.getElementById('is-observer');
+const cardSetSelect = document.getElementById('card-set');
 const joinBtn = document.getElementById('join-btn');
 const currentRoomIdDisplay = document.getElementById('current-room-id');
 const copyRoomIdBtn = document.getElementById('copy-room-id');
@@ -15,7 +16,7 @@ const leaveRoomBtn = document.getElementById('leave-room');
 const participantsList = document.getElementById('participants-list');
 const participantCount = document.getElementById('participant-count');
 const cardSelection = document.getElementById('card-selection');
-const cardButtons = document.querySelectorAll('.card-button');
+const cardsContainer = document.getElementById('cards-container');
 const revealBtn = document.getElementById('reveal-btn');
 const resetBtn = document.getElementById('reset-btn');
 const statistics = document.getElementById('statistics');
@@ -24,13 +25,97 @@ const statMedian = document.getElementById('stat-median');
 const statMin = document.getElementById('stat-min');
 const statMax = document.getElementById('stat-max');
 
+// Card deck definitions
+const CARD_DECKS = {
+  standard: {
+    label: 'Standard [1-100]',
+    cards: [
+      { value: 1, label: '1' },
+      { value: 2, label: '2' },
+      { value: 3, label: '3' },
+      { value: 5, label: '5' },
+      { value: 8, label: '8' },
+      { value: 13, label: '13' },
+      { value: 20, label: '20' },
+      { value: 40, label: '40' },
+      { value: 100, label: '100' },
+      { value: '?', label: '?', special: true }
+    ]
+  },
+  fibonacci: {
+    label: 'Fibonacci',
+    cards: [
+      { value: 0, label: '0' },
+      { value: 0.5, label: '½' },
+      { value: 1, label: '1' },
+      { value: 2, label: '2' },
+      { value: 3, label: '3' },
+      { value: 5, label: '5' },
+      { value: 8, label: '8' },
+      { value: 13, label: '13' },
+      { value: 21, label: '21' },
+      { value: 34, label: '34' },
+      { value: 55, label: '55' },
+      { value: '?', label: '?', special: true },
+      { value: '☕', label: '☕', special: true }
+    ]
+  },
+  tshirt: {
+    label: 'T-Shirt Sizes',
+    cards: [
+      { value: 'XS', label: 'XS' },
+      { value: 'S', label: 'S' },
+      { value: 'M', label: 'M' },
+      { value: 'L', label: 'L' },
+      { value: 'XL', label: 'XL' },
+      { value: 'XXL', label: 'XXL' },
+      { value: '?', label: '?', special: true }
+    ]
+  },
+  powers2: {
+    label: 'Powers of 2',
+    cards: [
+      { value: 1, label: '1' },
+      { value: 2, label: '2' },
+      { value: 4, label: '4' },
+      { value: 8, label: '8' },
+      { value: 16, label: '16' },
+      { value: 32, label: '32' },
+      { value: 64, label: '64' },
+      { value: '?', label: '?', special: true }
+    ]
+  }
+};
+
+// Render the card buttons for a given deck key
+function renderCards(deckKey) {
+  const deck = CARD_DECKS[deckKey] || CARD_DECKS.standard;
+  cardsContainer.innerHTML = '';
+  deck.cards.forEach(card => {
+    const btn = document.createElement('button');
+    btn.className = 'card-button' + (card.special ? ' card-special' : '');
+    btn.dataset.value = card.value;
+    btn.textContent = card.label;
+    cardsContainer.appendChild(btn);
+  });
+}
+
+// Clear all card selections
+function clearCardSelection() {
+  cardsContainer.querySelectorAll('.card-button').forEach(btn => btn.classList.remove('selected'));
+}
+
 // State
 let currentRoomId = null;
 let currentUserName = null;
 let isObserver = false;
 let selectedVote = null;
+let currentCardSet = 'standard';
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
 const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
+
+// Initialize cards with the default deck
+renderCards(currentCardSet);
 
 function setTheme(theme) {
   const isDark = theme === 'dark';
@@ -109,7 +194,8 @@ joinBtn.addEventListener('click', () => {
   socket.emit('join-room', {
     roomId: currentRoomId,
     userName: currentUserName,
-    isObserver: isObserver
+    isObserver: isObserver,
+    cardSet: cardSetSelect.value
   });
 
   // Show voting screen
@@ -175,38 +261,38 @@ leaveRoomBtn.addEventListener('click', () => {
   selectedVote = null;
   
   // Clear selected cards
-  cardButtons.forEach(btn => btn.classList.remove('selected'));
+  clearCardSelection();
 });
 
-// Card selection
-cardButtons.forEach(button => {
-  button.addEventListener('click', () => {
-    if (isObserver) return;
+// Card selection (event delegation on the container)
+cardsContainer.addEventListener('click', (e) => {
+  const button = e.target.closest('.card-button');
+  if (!button || isObserver) return;
 
-    const value = button.dataset.value;
+  const value = button.dataset.value;
+  
+  // Toggle selection
+  if (selectedVote === value) {
+    selectedVote = null;
+    button.classList.remove('selected');
+  } else {
+    // Remove previous selection
+    clearCardSelection();
     
-    // Toggle selection
-    if (selectedVote === value) {
-      selectedVote = null;
-      button.classList.remove('selected');
-    } else {
-      // Remove previous selection
-      cardButtons.forEach(btn => btn.classList.remove('selected'));
-      
-      // Set new selection
-      selectedVote = value;
-      button.classList.add('selected');
-    }
+    // Set new selection
+    selectedVote = value;
+    button.classList.add('selected');
+  }
 
-    // Send vote to server
-    let voteValue = null;
-    if (selectedVote !== null) {
-      voteValue = selectedVote === '?' || selectedVote === '☕' ? selectedVote : parseFloat(selectedVote);
-    }
-    socket.emit('vote', {
-      roomId: currentRoomId,
-      vote: voteValue
-    });
+  // Send vote to server
+  let voteValue = null;
+  if (selectedVote !== null) {
+    const numericVal = parseFloat(selectedVote);
+    voteValue = isNaN(numericVal) ? selectedVote : numericVal;
+  }
+  socket.emit('vote', {
+    roomId: currentRoomId,
+    vote: voteValue
   });
 });
 
@@ -221,11 +307,18 @@ resetBtn.addEventListener('click', () => {
   
   // Clear local selection immediately for responsiveness
   selectedVote = null;
-  cardButtons.forEach(btn => btn.classList.remove('selected'));
+  clearCardSelection();
 });
 
 // Handle room updates
 socket.on('room-update', (data) => {
+  // Update card deck if it changed
+  if (data.cardSet && data.cardSet !== currentCardSet) {
+    currentCardSet = data.cardSet;
+    selectedVote = null;
+    renderCards(currentCardSet);
+  }
+
   // Update participants
   participantsList.innerHTML = '';
   participantCount.textContent = data.users.length;
@@ -331,7 +424,7 @@ socket.on('room-update', (data) => {
   if (currentUser && currentUser.vote === null && selectedVote !== null) {
     // Server confirms we have no vote, clear local selection
     selectedVote = null;
-    cardButtons.forEach(btn => btn.classList.remove('selected'));
+    clearCardSelection();
   }
 });
 

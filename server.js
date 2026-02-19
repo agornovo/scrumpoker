@@ -94,7 +94,7 @@ io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
   // Join a room
-  socket.on('join-room', ({ roomId, userName, isObserver }) => {
+  socket.on('join-room', ({ roomId, userName, isObserver, cardSet }) => {
     // Create room if it doesn't exist
     if (!rooms.has(roomId)) {
       rooms.set(roomId, {
@@ -102,7 +102,8 @@ io.on('connection', (socket) => {
         users: new Map(),
         revealed: false,
         createdAt: new Date(),
-        creatorId: socket.id // Track the room creator
+        creatorId: socket.id, // Track the room creator
+        cardSet: cardSet || 'standard'
       });
       console.log('Created room:', roomId);
     }
@@ -275,7 +276,8 @@ io.on('connection', (socket) => {
       users,
       revealed: room.revealed,
       stats,
-      creatorId: room.creatorId
+      creatorId: room.creatorId,
+      cardSet: room.cardSet
     });
   }
 });
