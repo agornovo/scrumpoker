@@ -698,6 +698,22 @@ footer {
   background: var(--lighter-bg);
 }
 
+footer .footer-separator {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+footer .footer-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+footer .footer-link:hover {
+  color: var(--primary-light);
+  text-decoration: underline;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .header-top {

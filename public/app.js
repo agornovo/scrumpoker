@@ -329,3 +329,25 @@ socket.on('connect_error', (error) => {
   console.error('Connection error:', error);
   alert('Failed to connect to server. Please try again.');
 });
+
+// Fetch and update the source code link with commit hash
+async function updateSourceLink() {
+  try {
+    const response = await fetch('/api/commit');
+    const data = await response.json();
+    
+    if (data.hash) {
+      const sourceLink = document.getElementById('source-link');
+      if (sourceLink) {
+        sourceLink.href = `${data.repository}/commit/${data.hash}`;
+        sourceLink.title = `View source code at commit ${data.shortHash}`;
+      }
+    }
+  } catch (error) {
+    console.warn('Could not fetch commit info:', error);
+    // Link will still work, just points to the repo instead of specific commit
+  }
+}
+
+// Update source link on page load
+updateSourceLink();
