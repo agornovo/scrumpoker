@@ -448,7 +448,7 @@ test.describe('Multi-user Collaboration', () => {
     await context2.close();
   });
 
-  test('should clear results immediately on new round and show correct round 2 results', async ({ browser }) => {
+  test('should clear results immediately on new round and show correct round 2 results', async ({ browser }, testInfo) => {
     const roomId = 'MULTIROUNDTEST';
 
     const context1 = await browser.newContext();
@@ -477,6 +477,17 @@ test.describe('Multi-user Collaboration', () => {
     await expect(page1.locator('#statistics')).toBeVisible();
     await expect(page1.locator('#stat-avg')).toContainText('10.5');
 
+    // Screenshot: round 1 results shown (host view)
+    await testInfo.attach('round-1-results-host', {
+      body: await page1.screenshot(),
+      contentType: 'image/png'
+    });
+    // Screenshot: round 1 results shown (participant view)
+    await testInfo.attach('round-1-results-participant', {
+      body: await page2.screenshot(),
+      contentType: 'image/png'
+    });
+
     // Start new round
     await page1.click('#reset-btn');
 
@@ -493,6 +504,17 @@ test.describe('Multi-user Collaboration', () => {
     // Statistics also hidden for the other participant after server update
     await expect(page2.locator('#statistics')).toHaveClass(/hidden/);
 
+    // Screenshot: results cleared after new round (host view)
+    await testInfo.attach('new-round-results-cleared-host', {
+      body: await page1.screenshot(),
+      contentType: 'image/png'
+    });
+    // Screenshot: results cleared after new round (participant view)
+    await testInfo.attach('new-round-results-cleared-participant', {
+      body: await page2.screenshot(),
+      contentType: 'image/png'
+    });
+
     // --- Round 2 ---
     await page1.click('.card-button[data-value="3"]');
     await page2.click('.card-button[data-value="5"]');
@@ -503,6 +525,12 @@ test.describe('Multi-user Collaboration', () => {
     await expect(page1.locator('#stat-avg')).toContainText('4');
     // Round 1 average (10.5) must not be visible
     await expect(page1.locator('#stat-avg')).not.toContainText('10.5');
+
+    // Screenshot: round 2 results shown (host view)
+    await testInfo.attach('round-2-results-host', {
+      body: await page1.screenshot(),
+      contentType: 'image/png'
+    });
 
     await context1.close();
     await context2.close();
