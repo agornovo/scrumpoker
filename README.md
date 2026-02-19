@@ -4,17 +4,20 @@ A real-time networked scrum poker application for agile teams to estimate user s
 
 ## Screenshots
 
-### Card Selection Screen
-![Card Selection](https://github.com/user-attachments/assets/362892ea-589f-4550-ba36-05040a7ae207)
+### Welcome Screen (Light Theme)
+![Welcome Light Theme](https://github.com/user-attachments/assets/c3d3844d-295a-495e-956a-1cee97106f88)
 
-### Card Selected State
-![Card Selected](https://github.com/user-attachments/assets/8958ed8a-9d15-4065-bec9-b8bca03ffe19)
+### Welcome Screen (Dark Theme)
+![Welcome Dark Theme](https://github.com/user-attachments/assets/a44e7b7c-fcbb-49d9-b33e-3612fa9bc53c)
 
 ## Features
 
 - 🃏 **Real-time Collaboration** - Multiple users can join the same room and vote simultaneously
 - 📊 **Instant Results** - See statistics (average, median, min, max) when cards are revealed
 - 👥 **Observer Mode** - Join as an observer without voting
+- 🌓 **Theme Toggle** - Switch between light and dark themes (saved per browser)
+- 📘 **Estimation Help Section** - In-app guidance on usage, Fibonacci sizing, and story points
+- 👑 **Host Controls** - Room creator can reveal/reset rounds and remove participants
 - 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
 - 🔒 **Room-based Sessions** - Private rooms with unique IDs for team privacy
 - ⚡ **WebSocket Communication** - Fast, real-time updates using Socket.IO
@@ -174,13 +177,17 @@ The deployment includes:
    - A checkmark (✓) shows who has voted
 
 4. **Reveal Cards**
-   - When everyone has voted, click "Reveal Cards"
+   - The room host clicks "Reveal Cards" after everyone has voted
    - All votes are shown simultaneously
    - Statistics are calculated automatically
 
 5. **Start New Round**
-   - Click "New Round" to reset all votes
+   - The room host clicks "New Round" to reset all votes
    - Keep the same room and participants
+
+6. **Use Estimation Guidance**
+   - Open the help section on the welcome screen
+   - Review guidance on Scrum Poker purpose, Fibonacci sizing, and story points
 
 ## Architecture
 
