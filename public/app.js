@@ -306,9 +306,10 @@ revealBtn.addEventListener('click', () => {
 resetBtn.addEventListener('click', () => {
   socket.emit('reset', { roomId: currentRoomId });
   
-  // Clear local selection immediately for responsiveness
+  // Clear local selection and results immediately for responsiveness
   selectedVote = null;
   clearCardSelection();
+  statistics.classList.add('hidden');
 });
 
 // Handle room updates
