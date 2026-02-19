@@ -9,7 +9,10 @@
 <body>
   <div class="container">
     <header>
-      <h1>🃏 Scrum Poker</h1>
+      <div class="header-top">
+        <h1>🃏 Scrum Poker</h1>
+        <button id="theme-toggle" class="btn btn-secondary theme-toggle" type="button" aria-label="Switch theme">Dark theme</button>
+      </div>
       <p class="subtitle">Planning Poker for Agile Teams</p>
     </header>
 
@@ -41,6 +44,25 @@
         <div class="help-text">
           <p>💡 <strong>Tip:</strong> Share the Room ID with your team to collaborate</p>
         </div>
+        <section class="help-section" aria-labelledby="help-title">
+          <h3 id="help-title">How Scrum Poker helps your team</h3>
+          <details>
+            <summary>How to use the app</summary>
+            <p>Join with your name, share the room ID, pick a card, then reveal together to discuss differences and align.</p>
+          </details>
+          <details>
+            <summary>Purpose of Scrum Poker</summary>
+            <p>It gives everyone an equal voice in effort discussions and helps teams find shared understanding before building.</p>
+          </details>
+          <details>
+            <summary>Why Fibonacci numbers</summary>
+            <p>Uncertainty grows with size. Fibonacci spacing (1, 2, 3, 5, 8, 13...) reflects that larger work is harder to estimate precisely.</p>
+          </details>
+          <details>
+            <summary>Why estimate with story points</summary>
+            <p>Story points measure relative complexity and risk instead of hours, making planning more consistent across different team members.</p>
+          </details>
+        </section>
       </div>
     </div>
 
@@ -85,7 +107,7 @@
 
       <!-- Statistics (shown when revealed) -->
       <div id="statistics" class="statistics hidden">
-        <h3>Results</h3>
+        <h3><span aria-label="Statistics">📊</span> Results</h3>
         <div class="stats-grid">
           <div class="stat-item">
             <div class="stat-label">Average</div>
