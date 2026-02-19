@@ -30,12 +30,22 @@ let currentUserName = null;
 let isObserver = false;
 let selectedVote = null;
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
+const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
 
 function setTheme(theme) {
   const isDark = theme === 'dark';
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
   themeToggleBtn.textContent = isDark ? 'Light theme' : 'Dark theme';
   themeToggleBtn.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+}
+
+const paletteSwatches = document.querySelectorAll('.palette-swatch');
+
+function setPalette(palette) {
+  document.documentElement.setAttribute('data-palette', palette);
+  paletteSwatches.forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.palette === palette ? 'true' : 'false');
+  });
 }
 
 const prefersDarkTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -48,6 +58,14 @@ try {
 }
 setTheme(savedTheme || (prefersDarkTheme ? 'dark' : 'light'));
 
+let savedPalette = null;
+try {
+  savedPalette = localStorage.getItem(PALETTE_STORAGE_KEY);
+} catch (error) {
+  console.warn('Palette preference could not be read:', error);
+}
+setPalette(savedPalette || 'ocean');
+
 themeToggleBtn.addEventListener('click', () => {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const nextTheme = isDark ? 'light' : 'dark';
@@ -57,6 +75,18 @@ themeToggleBtn.addEventListener('click', () => {
   } catch (error) {
     console.warn('Theme preference could not be saved:', error);
   }
+});
+
+paletteSwatches.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const palette = btn.dataset.palette;
+    setPalette(palette);
+    try {
+      localStorage.setItem(PALETTE_STORAGE_KEY, palette);
+    } catch (error) {
+      console.warn('Palette preference could not be saved:', error);
+    }
+  });
 });
 
 // Generate a random room ID
