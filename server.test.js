@@ -27,16 +27,18 @@ function createTestServer() {
   
   // Socket.IO logic
   io.on('connection', (socket) => {
-    socket.on('join-room', ({ roomId, userName, isObserver }) => {
-      if (!rooms.has(roomId)) {
-        rooms.set(roomId, {
-          id: roomId,
-          users: new Map(),
-          revealed: false,
-          createdAt: new Date(),
-          creatorId: socket.id
-        });
-      }
+  // Join a room
+  socket.on('join-room', ({ roomId, userName, isObserver, cardSet }) => {
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, {
+        id: roomId,
+        users: new Map(),
+        revealed: false,
+        createdAt: new Date(),
+        creatorId: socket.id,
+        cardSet: cardSet || 'standard'
+      });
+    }
       
       const room = rooms.get(roomId);
       room.users.set(socket.id, {
@@ -169,7 +171,8 @@ function createTestServer() {
         users,
         revealed: room.revealed,
         stats,
-        creatorId: room.creatorId
+        creatorId: room.creatorId,
+        cardSet: room.cardSet
       });
     }
   });
@@ -1239,4 +1242,106 @@ describe('Multi-User Room Capacity', () => {
       }, BATCH_JOIN_DELAY_MS);
     });
   }, 30000);
+});
+
+describe('Card Set', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('should default to standard card set when none specified', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', (data) => {
+      expect(data.cardSet).toBe('standard');
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'CARDSET_DEFAULT', userName: 'Alice', isObserver: false });
+  });
+
+  test('should use specified card set when creating a room', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', (data) => {
+      expect(data.cardSet).toBe('fibonacci');
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'CARDSET_FIB', userName: 'Alice', isObserver: false, cardSet: 'fibonacci' });
+  });
+
+  test('should use room creator card set for subsequent joiners', (done) => {
+    const creator = Client(serverUrl);
+    const joiner = Client(serverUrl);
+
+    let joinCount = 0;
+
+    const handleUpdate = (data) => {
+      joinCount++;
+      if (joinCount === 2) {
+        expect(data.cardSet).toBe('tshirt');
+        creator.disconnect();
+        joiner.disconnect();
+        done();
+      }
+    };
+
+    creator.on('room-update', handleUpdate);
+    joiner.on('room-update', handleUpdate);
+
+    creator.emit('join-room', { roomId: 'CARDSET_ROOM', userName: 'Creator', isObserver: false, cardSet: 'tshirt' });
+
+    setTimeout(() => {
+      // Joiner specifies a different card set, but should get the room's card set
+      joiner.emit('join-room', { roomId: 'CARDSET_ROOM', userName: 'Joiner', isObserver: false, cardSet: 'powers2' });
+    }, 100);
+  });
+
+  test('should persist card set through reveal and reset', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      expect(data.cardSet).toBe('powers2');
+
+      if (updateCount === 1) {
+        client.emit('vote', { roomId: 'CARDSET_PERSIST', vote: 4 });
+      } else if (updateCount === 2) {
+        client.emit('reveal', { roomId: 'CARDSET_PERSIST' });
+      } else if (updateCount === 3) {
+        expect(data.revealed).toBe(true);
+        client.emit('reset', { roomId: 'CARDSET_PERSIST' });
+      } else if (updateCount === 4) {
+        expect(data.revealed).toBe(false);
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'CARDSET_PERSIST', userName: 'Alice', isObserver: false, cardSet: 'powers2' });
+  });
 });

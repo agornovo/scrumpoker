@@ -23,6 +23,7 @@ A real-time networked scrum poker application for agile teams to estimate user s
 
 - 🃏 **Real-time Collaboration** - Multiple users can join the same room and vote simultaneously
 - 📊 **Instant Results** - See statistics (average, median, min, max) when cards are revealed
+- 🎴 **Multiple Card Sets** - Choose from Standard [1-100], Fibonacci, T-Shirt Sizes, or Powers of 2
 - 👥 **Observer Mode** - Join as an observer without voting
 - 🌓 **Theme Toggle** - Switch between light and dark themes (saved per browser)
 - 📘 **Estimation Help Section** - In-app guidance on usage, Fibonacci sizing, and story points
@@ -33,9 +34,16 @@ A real-time networked scrum poker application for agile teams to estimate user s
 
 ## Card Values
 
-Standard Fibonacci sequence for story point estimation:
-- 0, ½, 1, 2, 3, 5, 8, 13, 21, 34, 55
-- Special cards: ? (unknown), ☕ (need a break)
+Choose from four card sets when creating a room:
+
+| Card Set | Values |
+|---|---|
+| **Standard** *(default)* | 1, 2, 3, 5, 8, 13, 20, 40, 100, ? |
+| **Fibonacci** | 0, ½, 1, 2, 3, 5, 8, 13, 21, 34, 55, ?, ☕ |
+| **T-Shirt Sizes** | XS, S, M, L, XL, XXL, ? |
+| **Powers of 2** | 1, 2, 4, 8, 16, 32, 64, ? |
+
+The card set is chosen by the room creator at join time and applies to all participants in the room.
 
 ## Local Development
 
@@ -113,9 +121,11 @@ Unit tests cover:
 - Vote reveal and reset operations
 - Multi-user collaboration
 - Observer mode
+- Card set selection and room-level broadcasting
 
 E2E tests cover:
 - Joining rooms and user authentication
+- Card set selection (Standard, Fibonacci, T-Shirt, Powers of 2)
 - Card selection and deselection
 - Voting workflow
 - Real-time updates across multiple users
@@ -123,6 +133,7 @@ E2E tests cover:
 - New round/reset functionality
 - Observer mode behavior
 - Copy room ID functionality
+- Room creator card set shared with all participants
 
 ### Continuous Integration
 
@@ -174,6 +185,7 @@ The deployment includes:
    - Enter your name
    - Either enter an existing Room ID or leave blank to create a new one
    - Optionally check "Join as Observer" to watch without voting
+   - Select a **Card Set** (Standard, Fibonacci, T-Shirt Sizes, or Powers of 2) — applies when creating a new room
    - Click "Join Room"
 
 2. **Share the Room**

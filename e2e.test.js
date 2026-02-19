@@ -104,8 +104,8 @@ test.describe('Scrum Poker Application', () => {
     await page.fill('#user-name', 'Voter');
     await page.click('#join-btn');
     
-    // Check all expected card values are present
-    const expectedValues = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '?', '☕'];
+    // Check all expected card values for the default Standard deck
+    const expectedValues = ['1', '2', '3', '5', '8', '13', '20', '40', '100', '?'];
     
     for (const value of expectedValues) {
       const card = page.locator(`.card-button[data-value="${value}"]`);
@@ -240,6 +240,50 @@ test.describe('Scrum Poker Application', () => {
     
     // Reset button should be disabled
     await expect(page.locator('#reset-btn')).toBeDisabled();
+  });
+
+  test('should show card set selector on welcome screen', async ({ page }) => {
+    const selector = page.locator('#card-set');
+    await expect(selector).toBeVisible();
+    // Default should be standard
+    await expect(selector).toHaveValue('standard');
+  });
+
+  test('should render Fibonacci deck when selected', async ({ page }) => {
+    await page.selectOption('#card-set', 'fibonacci');
+    await page.fill('#user-name', 'Voter');
+    await page.click('#join-btn');
+
+    // Fibonacci-specific cards should be visible
+    await expect(page.locator('.card-button[data-value="0"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="0.5"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="21"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="55"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="☕"]')).toBeVisible();
+  });
+
+  test('should render T-Shirt Sizes deck when selected', async ({ page }) => {
+    await page.selectOption('#card-set', 'tshirt');
+    await page.fill('#user-name', 'Voter');
+    await page.click('#join-btn');
+
+    await expect(page.locator('.card-button[data-value="XS"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="S"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="M"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="L"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="XL"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="XXL"]')).toBeVisible();
+  });
+
+  test('should render Powers of 2 deck when selected', async ({ page }) => {
+    await page.selectOption('#card-set', 'powers2');
+    await page.fill('#user-name', 'Voter');
+    await page.click('#join-btn');
+
+    await expect(page.locator('.card-button[data-value="4"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="16"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="32"]')).toBeVisible();
+    await expect(page.locator('.card-button[data-value="64"]')).toBeVisible();
   });
 });
 
@@ -505,6 +549,41 @@ test.describe('Multi-user Collaboration', () => {
     await expect(page2.locator('#welcome-screen')).not.toHaveClass(/hidden/);
     await expect(page2.locator('#voting-screen')).toHaveClass(/hidden/);
     
+    await context1.close();
+    await context2.close();
+  });
+
+  test('should use room creator card set for all participants', async ({ browser }) => {
+    const roomId = 'DECKTEST';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    // Creator joins with Fibonacci deck
+    await page1.goto(BASE_URL);
+    await page1.selectOption('#card-set', 'fibonacci');
+    await page1.fill('#user-name', 'Creator');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    // Joiner picks a different deck but should end up with the room's deck
+    await page2.goto(BASE_URL);
+    await page2.selectOption('#card-set', 'tshirt');
+    await page2.fill('#user-name', 'Joiner');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Both should see the Fibonacci deck
+    await expect(page1.locator('.card-button[data-value="21"]')).toBeVisible();
+    await expect(page2.locator('.card-button[data-value="21"]')).toBeVisible();
+    await expect(page2.locator('.card-button[data-value="55"]')).toBeVisible();
+
+    // T-Shirt specific cards should NOT be visible for the joiner
+    await expect(page2.locator('.card-button[data-value="XS"]')).not.toBeVisible();
+
     await context1.close();
     await context2.close();
   });
