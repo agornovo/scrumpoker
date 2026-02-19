@@ -53,16 +53,19 @@ app.get('/api/commit', (req, res) => {
     let commitHash = process.env.GIT_COMMIT || process.env.COMMIT_SHA;
     
     // If not available, try to get it from git (only once, then cached)
+    // Note: This will fail in Docker containers where .git directory is not present
     if (!commitHash) {
       try {
         commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 5000 }).trim();
       } catch (error) {
-        // Git not available or not in a git repository
+        // Git not available or not in a git repository (e.g., Docker container)
+        // Fall back to null - client will use repo link without specific commit
         commitHash = null;
       }
     }
     
     // Cache the result
+    // When commitHash is null (Docker/production), link will point to repo root
     cachedCommitInfo = {
       hash: commitHash,
       shortHash: commitHash ? commitHash.substring(0, 7) : null,
