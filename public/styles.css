@@ -12,6 +12,7 @@
   --success-color: #36b37e;
   --danger-color: #ff5630;
   --warning-color: #ffab00;
+  --warning-light: #ffc400;
   --light-bg: #f4f5f7;
   --lighter-bg: #fafbfc;
   --dark-text: #172b4d;
@@ -539,7 +540,7 @@ header h1 {
 }
 
 .card-button.card-special {
-  background: linear-gradient(135deg, var(--warning-color) 0%, #ffc400 100%);
+  background: linear-gradient(135deg, var(--warning-color) 0%, var(--warning-light) 100%);
   color: white;
 }
 
@@ -560,11 +561,6 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.statistics h3::before {
-  content: '📊';
-  font-size: 1.2rem;
 }
 
 .stats-grid {
