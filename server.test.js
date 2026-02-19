@@ -945,6 +945,7 @@ describe('Reveal and Reset Authorization', () => {
   test('only room creator should be able to reveal cards', (done) => {
     const creator = Client(serverUrl);
     const participant = Client(serverUrl);
+    const localRooms = rooms;
     
     let joinCount = 0;
     let revealReceived = false;
@@ -962,7 +963,7 @@ describe('Reveal and Reset Authorization', () => {
           
           // Wait and verify cards are NOT revealed
           setTimeout(() => {
-            const room = rooms.get('REVEAL_AUTH');
+            const room = localRooms.get('REVEAL_AUTH');
             expect(room.revealed).toBe(false);
             
             // Now creator reveals (should succeed)
