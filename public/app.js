@@ -109,6 +109,7 @@ function clearCardSelection() {
 let currentRoomId = null;
 let currentUserName = null;
 let isObserver = false;
+let isRevealed = false;
 let selectedVote = null;
 let currentCardSet = 'standard';
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
@@ -267,7 +268,7 @@ leaveRoomBtn.addEventListener('click', () => {
 // Card selection (event delegation on the container)
 cardsContainer.addEventListener('click', (e) => {
   const button = e.target.closest('.card-button');
-  if (!button || isObserver) return;
+  if (!button || isObserver || isRevealed) return;
 
   const value = button.dataset.value;
   
@@ -312,6 +313,9 @@ resetBtn.addEventListener('click', () => {
 
 // Handle room updates
 socket.on('room-update', (data) => {
+  // Track revealed state
+  isRevealed = data.revealed;
+
   // Update card deck if it changed
   if (data.cardSet && data.cardSet !== currentCardSet) {
     currentCardSet = data.cardSet;
@@ -405,6 +409,11 @@ socket.on('room-update', (data) => {
   // Update button states
   const hasVotes = data.users.some(u => !u.isObserver && u.vote !== null);
   const isCreator = data.creatorId === socket.id;
+
+  // Disable card selection when votes are revealed
+  cardsContainer.querySelectorAll('.card-button').forEach(btn => {
+    btn.disabled = data.revealed;
+  });
   
   // Only the room creator can reveal and reset
   if (!isCreator) {

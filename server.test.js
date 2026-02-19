@@ -56,6 +56,9 @@ function createTestServer() {
     socket.on('vote', ({ roomId, vote }) => {
       const room = rooms.get(roomId);
       if (!room) return;
+
+      // Prevent vote changes after cards are revealed
+      if (room.revealed) return;
       
       const user = room.users.get(socket.id);
       if (!user) return;
@@ -409,6 +412,44 @@ describe('Socket.IO Voting', () => {
         vote: 8
       });
     }, 100);
+  });
+
+  test('should not allow vote changes after cards are revealed', (done) => {
+    let updateCount = 0;
+    let revealDone = false;
+
+    clientSocket.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        // Initial join, cast a vote
+        clientSocket.emit('vote', { roomId: 'VOTE_LOCK', vote: 5 });
+      } else if (updateCount === 2) {
+        // Vote recorded, now reveal
+        expect(data.users[0].vote).toBe('voted');
+        clientSocket.emit('reveal', { roomId: 'VOTE_LOCK' });
+      } else if (updateCount === 3 && !revealDone) {
+        // Votes revealed
+        revealDone = true;
+        expect(data.revealed).toBe(true);
+        expect(data.users[0].vote).toBe(5);
+        // Try to change vote after reveal
+        clientSocket.emit('vote', { roomId: 'VOTE_LOCK', vote: 13 });
+        // Wait to confirm no update arrives (vote should be ignored)
+        setTimeout(() => {
+          clientSocket.disconnect();
+          done();
+        }, 300);
+      } else if (updateCount > 3) {
+        // Should not receive another update triggered by the vote-after-reveal
+        done(new Error('Received unexpected room-update after vote was rejected post-reveal'));
+      }
+    });
+
+    clientSocket.emit('join-room', {
+      roomId: 'VOTE_LOCK',
+      userName: 'Voter',
+      isObserver: false
+    });
   });
 });
 

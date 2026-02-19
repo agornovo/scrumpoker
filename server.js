@@ -134,6 +134,9 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
+    // Prevent vote changes after cards are revealed
+    if (room.revealed) return;
+
     const user = room.users.get(socket.id);
     if (!user) return;
 
