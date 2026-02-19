@@ -141,7 +141,7 @@ io.on('connection', (socket) => {
     if (!user) return;
 
     user.vote = vote;
-    console.log(`User ${user.name} voted ${vote} in room ${roomId}`);
+    console.log(`User ${user.name} voted in room ${roomId}`);
 
     emitRoomUpdate(roomId);
   });
