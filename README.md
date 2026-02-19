@@ -5,19 +5,19 @@ A real-time networked scrum poker application for agile teams to estimate user s
 ## Screenshots
 
 ### Welcome Screen (Light Theme)
-![Welcome Light Theme](https://github.com/user-attachments/assets/c3d3844d-295a-495e-956a-1cee97106f88)
+![Welcome Light Theme](https://github.com/user-attachments/assets/7080d881-bdcc-41e9-9cb2-719cddcb4e74)
 
 ### Welcome Screen (Dark Theme)
-![Welcome Dark Theme](https://github.com/user-attachments/assets/a44e7b7c-fcbb-49d9-b33e-3612fa9bc53c)
+![Welcome Dark Theme](https://github.com/user-attachments/assets/e6fb3825-73d8-4d3f-bb3c-01e32d339f92)
 
 ### Voting Room
-![Voting Room](https://github.com/user-attachments/assets/b6ae8845-d8b2-481e-932b-e5725e5d9c35)
+![Voting Room](https://github.com/user-attachments/assets/cc9ef640-86ad-42a6-8d32-b5327f3181a5)
 
 ### Card Selected State
-![Card Selected](https://github.com/user-attachments/assets/b6136ed1-70c5-47e0-a5e4-2d01ffb92d3c)
+![Card Selected](https://github.com/user-attachments/assets/42da6754-de28-40ae-a093-fff2daac7c25)
 
 ### Revealed Results
-![Revealed Results](https://github.com/user-attachments/assets/5bd690b7-9ddc-4525-b2e6-e28c5f79f052)
+![Revealed Results](https://github.com/user-attachments/assets/8117ecda-cffa-463a-8eaf-0c7bbab0a8ab)
 
 ## Features
 
