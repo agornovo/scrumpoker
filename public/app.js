@@ -331,7 +331,7 @@ socket.on('connect_error', (error) => {
 });
 
 // Fetch and update the source code link with commit hash
-async function updateSourceLink() {
+async function initializeCommitLink() {
   try {
     const response = await fetch('/api/commit');
     if (!response.ok) {
@@ -353,4 +353,4 @@ async function updateSourceLink() {
 }
 
 // Update source link on page load
-updateSourceLink();
+initializeCommitLink();
