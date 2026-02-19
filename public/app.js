@@ -334,6 +334,9 @@ socket.on('connect_error', (error) => {
 async function updateSourceLink() {
   try {
     const response = await fetch('/api/commit');
+    if (!response.ok) {
+      throw new Error('Failed to fetch commit info');
+    }
     const data = await response.json();
     
     if (data.hash) {

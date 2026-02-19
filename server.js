@@ -47,7 +47,7 @@ app.get('/api/commit', (req, res) => {
     // If not available, try to get it from git
     if (!commitHash) {
       try {
-        commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+        commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 5000 }).trim();
       } catch (error) {
         // Git not available or not in a git repository
         commitHash = null;
