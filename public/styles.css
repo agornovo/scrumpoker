@@ -353,6 +353,7 @@ header h1 {
   font-size: 1rem;
   transition: all 0.2s ease;
   background: var(--lighter-bg);
+  color: var(--dark-text);
 }
 
 .form-group select {
