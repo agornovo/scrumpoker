@@ -310,6 +310,14 @@ resetBtn.addEventListener('click', () => {
   selectedVote = null;
   clearCardSelection();
   statistics.classList.add('hidden');
+
+  // Immediately clear participant vote values so the previous round's
+  // results are not visible while we wait for the server's room-update
+  participantsList.querySelectorAll('.participant-card:not(.observer) .participant-vote').forEach(voteEl => {
+    voteEl.textContent = '...';
+    voteEl.style.color = '#dee2e6';
+    voteEl.classList.remove('hidden-vote');
+  });
 });
 
 // Handle room updates

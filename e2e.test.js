@@ -448,6 +448,66 @@ test.describe('Multi-user Collaboration', () => {
     await context2.close();
   });
 
+  test('should clear results immediately on new round and show correct round 2 results', async ({ browser }) => {
+    const roomId = 'MULTIROUNDTEST';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    // Both join
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Alice');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Bob');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // --- Round 1 ---
+    await page1.click('.card-button[data-value="8"]');
+    await page2.click('.card-button[data-value="13"]');
+    await page1.click('#reveal-btn');
+
+    // Round 1 results visible
+    await expect(page1.locator('#statistics')).toBeVisible();
+    await expect(page1.locator('#stat-avg')).toContainText('10.5');
+
+    // Start new round
+    await page1.click('#reset-btn');
+
+    // Statistics must be hidden immediately on the host's page
+    await expect(page1.locator('#statistics')).toHaveClass(/hidden/);
+
+    // Participant vote displays must be cleared (no round-1 numbers visible)
+    const voteEls1 = page1.locator('.participant-card:not(.observer) .participant-vote');
+    const count = await voteEls1.count();
+    for (let i = 0; i < count; i++) {
+      await expect(voteEls1.nth(i)).toContainText('...');
+    }
+
+    // Statistics also hidden for the other participant after server update
+    await expect(page2.locator('#statistics')).toHaveClass(/hidden/);
+
+    // --- Round 2 ---
+    await page1.click('.card-button[data-value="3"]');
+    await page2.click('.card-button[data-value="5"]');
+    await page1.click('#reveal-btn');
+
+    // Round 2 results correct (avg of 3 and 5 is 4)
+    await expect(page1.locator('#statistics')).toBeVisible();
+    await expect(page1.locator('#stat-avg')).toContainText('4');
+    // Round 1 average (10.5) must not be visible
+    await expect(page1.locator('#stat-avg')).not.toContainText('10.5');
+
+    await context1.close();
+    await context2.close();
+  });
+
   test('should handle observer not affecting statistics', async ({ browser }) => {
     const roomId = 'OBSERVERTEST';
     
