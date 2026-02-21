@@ -1019,7 +1019,10 @@ describe('Reveal and Reset Authorization', () => {
     participant.on('room-update', handleJoin);
     
     creator.emit('join-room', { roomId: 'REVEAL_AUTH', userName: 'Creator', isObserver: false });
-    participant.emit('join-room', { roomId: 'REVEAL_AUTH', userName: 'Participant', isObserver: false });
+    // Delay participant join to ensure creator is established as room creator first
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'REVEAL_AUTH', userName: 'Participant', isObserver: false });
+    }, 100);
   });
   
   test('only room creator should be able to reset votes', (done) => {

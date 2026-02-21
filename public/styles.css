@@ -643,6 +643,7 @@ header h1 {
   border: 2px solid var(--border-color);
   position: relative;
   box-shadow: var(--shadow-sm);
+  animation: card-enter 0.25s ease-out;
 }
 
 .participant-card:hover {
@@ -1065,4 +1066,85 @@ footer .footer-link:hover {
   .cards-container {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* === Fun Animations === */
+
+/* Participant card entrance */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Screen entrance when joining a room */
+@keyframes screen-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.screen-enter {
+  animation: screen-slide-in 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Vote reveal flip */
+@keyframes vote-flip {
+  0% { transform: scaleX(1); opacity: 1; }
+  40% { transform: scaleX(0); opacity: 0.4; }
+  60% { transform: scaleX(0); opacity: 0.4; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+
+.participant-vote.flip-reveal {
+  animation: vote-flip 0.45s ease-in-out;
+}
+
+/* Statistics section entrance */
+@keyframes stats-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.statistics.animate-in {
+  animation: stats-enter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Confetti celebration */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-10px) translateX(0) rotate(0deg) scale(1);
+  }
+  25% { transform: translateY(25vh) translateX(15px) rotate(180deg) scale(0.85); }
+  50% { transform: translateY(50vh) translateX(-10px) rotate(360deg) scale(0.9); }
+  75% { transform: translateY(75vh) translateX(20px) rotate(540deg) scale(0.75); opacity: 0.8; }
+  100% {
+    opacity: 0;
+    transform: translateY(110vh) translateX(-5px) rotate(720deg) scale(0.5);
+  }
+}
+
+.confetti-particle {
+  position: fixed;
+  top: 0;
+  pointer-events: none;
+  z-index: 9999;
+  animation: confetti-fall linear forwards;
 }
