@@ -1075,7 +1075,10 @@ describe('Reveal and Reset Authorization', () => {
     participant.on('room-update', handleJoin);
     
     creator.emit('join-room', { roomId: 'RESET_AUTH', userName: 'Creator', isObserver: false });
-    participant.emit('join-room', { roomId: 'RESET_AUTH', userName: 'Participant', isObserver: false });
+    // Delay participant join to ensure creator is established as room creator first
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'RESET_AUTH', userName: 'Participant', isObserver: false });
+    }, 100);
   });
   
   test('room creator who is an observer should be able to reveal cards', (done) => {
