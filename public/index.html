@@ -101,6 +101,13 @@
         </div>
       </div>
 
+    <!-- Story Title -->
+      <div class="story-section" id="story-section">
+        <span class="label">Current Story</span>
+        <input type="text" id="story-title-input" class="story-title-input hidden" placeholder="Enter story title or ticket number..." maxlength="200" aria-label="Story title">
+        <div id="story-title-display" class="story-title-display hidden" aria-live="polite"></div>
+      </div>
+
       <!-- Participants -->
       <div class="participants-section">
         <h3>Participants <span id="participant-count" class="count-badge">0</span></h3>
@@ -139,6 +146,10 @@
 
       <!-- Action Buttons -->
       <div class="action-buttons">
+        <label id="auto-reveal-toggle" class="auto-reveal-toggle hidden">
+          <input type="checkbox" id="auto-reveal-checkbox">
+          Auto-reveal when all voted
+        </label>
         <button id="reveal-btn" class="btn btn-primary">Reveal Cards</button>
         <button id="reset-btn" class="btn btn-secondary">New Round</button>
       </div>

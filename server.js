@@ -103,7 +103,9 @@ io.on('connection', (socket) => {
         revealed: false,
         createdAt: new Date(),
         creatorId: socket.id, // Track the room creator
-        cardSet: cardSet || 'standard'
+        cardSet: cardSet || 'standard',
+        storyTitle: '',
+        autoReveal: false
       });
       console.log('Created room:', roomId);
     }
@@ -143,6 +145,16 @@ io.on('connection', (socket) => {
     user.vote = vote;
     console.log(`User ${user.name} voted in room ${roomId}`);
 
+    // Auto-reveal: if enabled and all non-observer voters have voted, reveal cards
+    if (room.autoReveal && !room.revealed) {
+      const voters = Array.from(room.users.values()).filter(u => !u.isObserver);
+      const allVoted = voters.length > 0 && voters.every(u => u.vote !== null);
+      if (allVoted) {
+        room.revealed = true;
+        console.log(`Auto-revealed cards in room ${roomId}`);
+      }
+    }
+
     emitRoomUpdate(roomId);
   });
 
@@ -180,6 +192,28 @@ io.on('connection', (socket) => {
     });
     console.log(`Votes reset in room ${roomId}`);
 
+    emitRoomUpdate(roomId);
+  });
+
+  // Set story title (only room creator can do this)
+  socket.on('set-story', ({ roomId, storyTitle }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    if (socket.id !== room.creatorId) return;
+
+    room.storyTitle = typeof storyTitle === 'string' ? storyTitle.substring(0, 200) : '';
+    emitRoomUpdate(roomId);
+  });
+
+  // Toggle auto-reveal (only room creator can do this)
+  socket.on('toggle-auto-reveal', ({ roomId, autoReveal }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    if (socket.id !== room.creatorId) return;
+
+    room.autoReveal = !!autoReveal;
     emitRoomUpdate(roomId);
   });
 
@@ -280,7 +314,9 @@ io.on('connection', (socket) => {
       revealed: room.revealed,
       stats,
       creatorId: room.creatorId,
-      cardSet: room.cardSet
+      cardSet: room.cardSet,
+      storyTitle: room.storyTitle,
+      autoReveal: room.autoReveal
     });
   }
 });

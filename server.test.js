@@ -36,7 +36,9 @@ function createTestServer() {
         revealed: false,
         createdAt: new Date(),
         creatorId: socket.id,
-        cardSet: cardSet || 'standard'
+        cardSet: cardSet || 'standard',
+        storyTitle: '',
+        autoReveal: false
       });
     }
       
@@ -64,6 +66,16 @@ function createTestServer() {
       if (!user) return;
       
       user.vote = vote;
+
+      // Auto-reveal: if enabled and all non-observer voters have voted, reveal cards
+      if (room.autoReveal && !room.revealed) {
+        const voters = Array.from(room.users.values()).filter(u => !u.isObserver);
+        const allVoted = voters.length > 0 && voters.every(u => u.vote !== null);
+        if (allVoted) {
+          room.revealed = true;
+        }
+      }
+
       emitRoomUpdate(roomId);
     });
     
@@ -97,7 +109,23 @@ function createTestServer() {
       });
       emitRoomUpdate(roomId);
     });
-    
+
+    socket.on('set-story', ({ roomId, storyTitle }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+      if (socket.id !== room.creatorId) return;
+      room.storyTitle = typeof storyTitle === 'string' ? storyTitle.substring(0, 200) : '';
+      emitRoomUpdate(roomId);
+    });
+
+    socket.on('toggle-auto-reveal', ({ roomId, autoReveal }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+      if (socket.id !== room.creatorId) return;
+      room.autoReveal = !!autoReveal;
+      emitRoomUpdate(roomId);
+    });
+
     socket.on('remove-participant', ({ roomId, participantId }) => {
       const room = rooms.get(roomId);
       if (!room) return;
@@ -175,7 +203,9 @@ function createTestServer() {
         revealed: room.revealed,
         stats,
         creatorId: room.creatorId,
-        cardSet: room.cardSet
+        cardSet: room.cardSet,
+        storyTitle: room.storyTitle,
+        autoReveal: room.autoReveal
       });
     }
   });
@@ -1385,5 +1415,304 @@ describe('Card Set', () => {
     });
 
     client.emit('join-room', { roomId: 'CARDSET_PERSIST', userName: 'Alice', isObserver: false, cardSet: 'powers2' });
+  });
+});
+
+describe('Story Title', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('should include empty storyTitle in room-update by default', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', (data) => {
+      expect(data.storyTitle).toBe('');
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'STORY_DEFAULT', userName: 'Alice', isObserver: false });
+  });
+
+  test('should allow host to set story title', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('set-story', { roomId: 'STORY_SET', storyTitle: 'User Login Feature' });
+      } else if (updateCount === 2) {
+        expect(data.storyTitle).toBe('User Login Feature');
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'STORY_SET', userName: 'Host', isObserver: false });
+  });
+
+  test('should not allow non-host to set story title', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    host.on('room-update', (data) => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Participant tries to set story (should be ignored)
+        participant.emit('set-story', { roomId: 'STORY_AUTH', storyTitle: 'Unauthorized Story' });
+
+        setTimeout(() => {
+          const room = rooms.get('STORY_AUTH');
+          expect(room.storyTitle).toBe('');
+          host.disconnect();
+          participant.disconnect();
+          done();
+        }, 200);
+      }
+    });
+
+    host.emit('join-room', { roomId: 'STORY_AUTH', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'STORY_AUTH', userName: 'Participant', isObserver: false });
+    }, 50);
+  });
+
+  test('should truncate story title to 200 characters', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+    const longTitle = 'A'.repeat(250);
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('set-story', { roomId: 'STORY_TRUNC', storyTitle: longTitle });
+      } else if (updateCount === 2) {
+        expect(data.storyTitle).toHaveLength(200);
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'STORY_TRUNC', userName: 'Host', isObserver: false });
+  });
+
+  test('should broadcast story title to all room participants', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+    let receivedByParticipant = false;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        host.emit('set-story', { roomId: 'STORY_BROADCAST', storyTitle: 'Shared Story' });
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', (data) => {
+      handleJoin();
+      if (data.storyTitle === 'Shared Story') {
+        receivedByParticipant = true;
+        expect(receivedByParticipant).toBe(true);
+        host.disconnect();
+        participant.disconnect();
+        done();
+      }
+    });
+
+    host.emit('join-room', { roomId: 'STORY_BROADCAST', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'STORY_BROADCAST', userName: 'Participant', isObserver: false });
+    }, 50);
+  });
+});
+
+describe('Auto-Reveal', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('should include autoReveal false in room-update by default', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', (data) => {
+      expect(data.autoReveal).toBe(false);
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'AR_DEFAULT', userName: 'Alice', isObserver: false });
+  });
+
+  test('should allow host to toggle auto-reveal', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('toggle-auto-reveal', { roomId: 'AR_TOGGLE', autoReveal: true });
+      } else if (updateCount === 2) {
+        expect(data.autoReveal).toBe(true);
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'AR_TOGGLE', userName: 'Host', isObserver: false });
+  });
+
+  test('should not allow non-host to toggle auto-reveal', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    host.on('room-update', (data) => {
+      joinCount++;
+      if (joinCount === 2) {
+        participant.emit('toggle-auto-reveal', { roomId: 'AR_AUTH', autoReveal: true });
+
+        setTimeout(() => {
+          const room = rooms.get('AR_AUTH');
+          expect(room.autoReveal).toBe(false);
+          host.disconnect();
+          participant.disconnect();
+          done();
+        }, 200);
+      }
+    });
+
+    host.emit('join-room', { roomId: 'AR_AUTH', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'AR_AUTH', userName: 'Participant', isObserver: false });
+    }, 50);
+  });
+
+  test('should auto-reveal when all voters have voted and auto-reveal is enabled', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+    let autoRevealEnabled = false;
+    let revealReceived = false;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2 && !autoRevealEnabled) {
+        autoRevealEnabled = true;
+        host.emit('toggle-auto-reveal', { roomId: 'AR_ALL_VOTED', autoReveal: true });
+      }
+    };
+
+    host.on('room-update', (data) => {
+      handleJoin();
+      if (!revealReceived && data.revealed) {
+        revealReceived = true;
+        expect(data.revealed).toBe(true);
+        expect(data.stats).not.toBeNull();
+        host.disconnect();
+        participant.disconnect();
+        done();
+      } else if (autoRevealEnabled && data.autoReveal && !revealReceived) {
+        // Auto-reveal is set; now both users vote
+        host.emit('vote', { roomId: 'AR_ALL_VOTED', vote: 5 });
+        participant.emit('vote', { roomId: 'AR_ALL_VOTED', vote: 8 });
+      }
+    });
+
+    participant.on('room-update', handleJoin);
+
+    host.emit('join-room', { roomId: 'AR_ALL_VOTED', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'AR_ALL_VOTED', userName: 'Participant', isObserver: false });
+    }, 50);
+  });
+
+  test('should not auto-reveal when auto-reveal is disabled', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        // Auto-reveal is off (default); vote immediately
+        client.emit('vote', { roomId: 'AR_DISABLED', vote: 5 });
+      } else if (updateCount === 2) {
+        // Vote recorded, should NOT be auto-revealed
+        expect(data.revealed).toBe(false);
+        expect(data.autoReveal).toBe(false);
+        setTimeout(() => {
+          client.disconnect();
+          done();
+        }, 200);
+      }
+    });
+
+    client.emit('join-room', { roomId: 'AR_DISABLED', userName: 'Voter', isObserver: false });
+  });
+
+  test('should not auto-reveal when only observers are in the room', (done) => {
+    const host = Client(serverUrl);
+    let autoRevealEnabled = false;
+
+    host.on('room-update', (data) => {
+      if (!autoRevealEnabled) {
+        autoRevealEnabled = true;
+        host.emit('toggle-auto-reveal', { roomId: 'AR_OBSERVERS', autoReveal: true });
+      } else if (data.autoReveal) {
+        // Auto-reveal enabled with only an observer, should not trigger reveal
+        setTimeout(() => {
+          const room = rooms.get('AR_OBSERVERS');
+          expect(room.revealed).toBe(false);
+          host.disconnect();
+          done();
+        }, 200);
+      }
+    });
+
+    host.emit('join-room', { roomId: 'AR_OBSERVERS', userName: 'HostObserver', isObserver: true });
   });
 });
