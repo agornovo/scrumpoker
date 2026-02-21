@@ -124,6 +124,68 @@ const FIREWORK_SPARKS_PER_BURST = 20;
 const FIREWORK_BURST_DELAY_MS = 380;
 const TADA_BOUNCE_SETTLE_DELAY_MS = 900;
 
+// Sound effects synthesised via Web Audio API – no audio files required
+const SoundEffects = (() => {
+  let audioCtx = null;
+
+  function getCtx() {
+    if (!window.AudioContext && !window.webkitAudioContext) return null;
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function tone(freq, duration, type, gain, startOffset = 0) {
+    const ctx = getCtx();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + startOffset);
+    gainNode.gain.setValueAtTime(gain, ctx.currentTime + startOffset);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startOffset + duration);
+    osc.start(ctx.currentTime + startOffset);
+    osc.stop(ctx.currentTime + startOffset + duration);
+    osc.onended = () => { osc.disconnect(); gainNode.disconnect(); };
+  }
+
+  return {
+    // Soft "pip" when picking a card
+    cardSelect() {
+      tone(880, 0.09, 'sine', 0.12);
+    },
+
+    // Quick ascending whoosh when votes are revealed
+    reveal() {
+      const ctx = getCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(550, ctx.currentTime + 0.28);
+      gainNode.gain.setValueAtTime(0.14, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+      osc.onended = () => { osc.disconnect(); gainNode.disconnect(); };
+    },
+
+    // Three-note ascending fanfare for consensus celebration
+    fanfare() {
+      tone(523, 0.22, 'sine', 0.18, 0.0);   // C5
+      tone(659, 0.22, 'sine', 0.18, 0.15);  // E5
+      tone(784, 0.35, 'sine', 0.20, 0.30);  // G5
+    }
+  };
+})();
+
 // Launch confetti celebration (palette-aware + classic colors)
 function triggerConfetti(superMode = false) {
   const style = getComputedStyle(document.documentElement);
@@ -149,6 +211,7 @@ function triggerConfetti(superMode = false) {
 
   if (superMode) {
     triggerFireworks();
+    SoundEffects.fanfare();
   }
 }
 
@@ -184,6 +247,7 @@ function triggerFireworks() {
 function triggerCardSparkle(buttonEl) {
   buttonEl.classList.add('card-sparkle');
   buttonEl.addEventListener('animationend', () => buttonEl.classList.remove('card-sparkle'), { once: true });
+  SoundEffects.cardSelect();
 }
 
 // State
@@ -545,6 +609,10 @@ socket.on('room-update', (data) => {
     if (justRevealed) {
       statistics.classList.add('animate-in');
       statistics.addEventListener('animationend', () => statistics.classList.remove('animate-in'), { once: true });
+
+      if (specialEffectsEnabled) {
+        SoundEffects.reveal();
+      }
 
       // Confetti when all voters agree
       const voters = data.users.filter(u => !u.isObserver && u.vote !== null);
