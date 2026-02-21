@@ -28,7 +28,7 @@ function createTestServer() {
   // Socket.IO logic
   io.on('connection', (socket) => {
   // Join a room
-  socket.on('join-room', ({ roomId, userName, isObserver, cardSet }) => {
+  socket.on('join-room', ({ roomId, userName, isObserver, cardSet, specialEffects }) => {
     if (!rooms.has(roomId)) {
       rooms.set(roomId, {
         id: roomId,
@@ -38,7 +38,8 @@ function createTestServer() {
         creatorId: socket.id,
         cardSet: cardSet || 'standard',
         storyTitle: '',
-        autoReveal: false
+        autoReveal: false,
+        specialEffects: !!specialEffects
       });
     }
       
@@ -205,7 +206,8 @@ function createTestServer() {
         creatorId: room.creatorId,
         cardSet: room.cardSet,
         storyTitle: room.storyTitle,
-        autoReveal: room.autoReveal
+        autoReveal: room.autoReveal,
+        specialEffects: room.specialEffects
       });
     }
   });
@@ -353,6 +355,37 @@ describe('Socket.IO Room Management', () => {
       roomId: 'OBS123',
       userName: 'Observer',
       isObserver: true
+    });
+  });
+
+  test('should set specialEffects to true when host enables it', (done) => {
+    clientSocket = Client(serverUrl);
+
+    clientSocket.on('room-update', (data) => {
+      expect(data.specialEffects).toBe(true);
+      done();
+    });
+
+    clientSocket.emit('join-room', {
+      roomId: 'SFX123',
+      userName: 'Host',
+      isObserver: false,
+      specialEffects: true
+    });
+  });
+
+  test('should default specialEffects to false when not provided', (done) => {
+    clientSocket = Client(serverUrl);
+
+    clientSocket.on('room-update', (data) => {
+      expect(data.specialEffects).toBe(false);
+      done();
+    });
+
+    clientSocket.emit('join-room', {
+      roomId: 'NOSFX1',
+      userName: 'Host',
+      isObserver: false
     });
   });
 });
