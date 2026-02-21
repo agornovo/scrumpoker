@@ -688,3 +688,130 @@ test.describe('Multi-user Collaboration', () => {
     await context2.close();
   });
 });
+
+test.describe('Story Title', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(BASE_URL);
+  });
+
+  test('should show story title input for the host', async ({ page }) => {
+    await page.fill('#user-name', 'Host');
+    await page.click('#join-btn');
+
+    // Story title input should be visible for the host
+    await expect(page.locator('#story-title-input')).toBeVisible();
+  });
+
+  test('should broadcast story title to all participants', async ({ browser }) => {
+    const roomId = 'STORYBROADCAST';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Wait for both to see each other
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+
+    // Host types a story title
+    await page1.fill('#story-title-input', 'User Login Feature');
+    // Trigger the debounced input event
+    await page1.dispatchEvent('#story-title-input', 'input');
+    await page1.waitForTimeout(500);
+
+    // Participant should see the story title
+    await expect(page2.locator('#story-title-display')).toBeVisible();
+    await expect(page2.locator('#story-title-display')).toContainText('User Login Feature');
+
+    await context1.close();
+    await context2.close();
+  });
+
+  test('should not show story title input to non-host', async ({ browser }) => {
+    const roomId = 'STORYHOST';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Non-host should not see the story title input
+    await expect(page2.locator('#story-title-input')).toHaveClass(/hidden/);
+
+    await context1.close();
+    await context2.close();
+  });
+});
+
+test.describe('Auto-Reveal', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(BASE_URL);
+  });
+
+  test('should show auto-reveal toggle for the host', async ({ page }) => {
+    await page.fill('#user-name', 'Host');
+    await page.click('#join-btn');
+
+    // Auto-reveal toggle should be visible to host
+    await expect(page.locator('#auto-reveal-toggle')).toBeVisible();
+  });
+
+  test('should auto-reveal when all voters have voted', async ({ browser }) => {
+    const roomId = 'AUTOREVEAL';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Voter');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Wait for both to join
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+
+    // Host enables auto-reveal
+    await page1.check('#auto-reveal-checkbox');
+
+    // Both vote
+    await page1.click('.card-button[data-value="5"]');
+    await page2.click('.card-button[data-value="8"]');
+
+    // Statistics should appear automatically (auto-revealed)
+    await expect(page1.locator('#statistics')).toBeVisible();
+    await expect(page2.locator('#statistics')).toBeVisible();
+
+    await context1.close();
+    await context2.close();
+  });
+});

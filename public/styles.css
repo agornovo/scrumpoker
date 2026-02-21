@@ -892,10 +892,85 @@ header h1 {
   gap: 15px;
   justify-content: center;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .action-buttons .btn {
   min-width: 150px;
+}
+
+.auto-reveal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--medium-text);
+  cursor: pointer;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 2px solid var(--border-color);
+  background: var(--lighter-bg);
+  transition: all 0.2s ease;
+}
+
+.auto-reveal-toggle:hover {
+  border-color: var(--primary-light);
+  color: var(--dark-text);
+}
+
+.auto-reveal-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.story-section {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.story-section .label {
+  flex-shrink: 0;
+}
+
+.story-title-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 1rem;
+  background: var(--lighter-bg);
+  color: var(--dark-text);
+  transition: all 0.2s ease;
+}
+
+.story-title-input:hover {
+  border-color: var(--light-text);
+  background: var(--card-bg);
+}
+
+.story-title-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  background: var(--card-bg);
+  box-shadow: 0 0 0 3px rgba(76, 154, 255, 0.1);
+}
+
+.story-title-display {
+  flex: 1;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--dark-text);
 }
 
 footer {

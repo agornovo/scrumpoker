@@ -24,6 +24,11 @@ const statAvg = document.getElementById('stat-avg');
 const statMedian = document.getElementById('stat-median');
 const statMin = document.getElementById('stat-min');
 const statMax = document.getElementById('stat-max');
+const storySection = document.getElementById('story-section');
+const storyTitleInput = document.getElementById('story-title-input');
+const storyTitleDisplay = document.getElementById('story-title-display');
+const autoRevealToggle = document.getElementById('auto-reveal-toggle');
+const autoRevealCheckbox = document.getElementById('auto-reveal-checkbox');
 
 // Card deck definitions
 const CARD_DECKS = {
@@ -261,8 +266,36 @@ leaveRoomBtn.addEventListener('click', () => {
   roomIdInput.value = '';
   selectedVote = null;
   
+  // Clear story title
+  storyTitleInput.value = '';
+  storyTitleInput.classList.add('hidden');
+  storyTitleDisplay.textContent = '';
+  storyTitleDisplay.classList.add('hidden');
+  autoRevealToggle.classList.add('hidden');
+  autoRevealCheckbox.checked = false;
+  
   // Clear selected cards
   clearCardSelection();
+});
+
+// Story title input (debounced to avoid excessive server calls while typing)
+let storyTitleTimer = null;
+storyTitleInput.addEventListener('input', () => {
+  clearTimeout(storyTitleTimer);
+  storyTitleTimer = setTimeout(() => {
+    socket.emit('set-story', {
+      roomId: currentRoomId,
+      storyTitle: storyTitleInput.value
+    });
+  }, 300);
+});
+
+// Auto-reveal toggle
+autoRevealCheckbox.addEventListener('change', () => {
+  socket.emit('toggle-auto-reveal', {
+    roomId: currentRoomId,
+    autoReveal: autoRevealCheckbox.checked
+  });
 });
 
 // Card selection (event delegation on the container)
@@ -451,6 +484,27 @@ socket.on('room-update', (data) => {
     // Server confirms we have no vote, clear local selection
     selectedVote = null;
     clearCardSelection();
+  }
+
+  // Update story title
+  if (isCreator) {
+    storyTitleInput.classList.remove('hidden');
+    storyTitleDisplay.classList.add('hidden');
+    // Only update when not focused to avoid interrupting typing
+    if (document.activeElement !== storyTitleInput) {
+      storyTitleInput.value = data.storyTitle || '';
+    }
+    autoRevealToggle.classList.remove('hidden');
+    autoRevealCheckbox.checked = data.autoReveal || false;
+  } else {
+    storyTitleInput.classList.add('hidden');
+    autoRevealToggle.classList.add('hidden');
+    if (data.storyTitle) {
+      storyTitleDisplay.textContent = data.storyTitle;
+      storyTitleDisplay.classList.remove('hidden');
+    } else {
+      storyTitleDisplay.classList.add('hidden');
+    }
   }
 });
 
