@@ -5,19 +5,19 @@ A real-time networked scrum poker application for agile teams to estimate user s
 ## Screenshots
 
 ### Welcome Screen (Light Theme)
-![Welcome Light Theme](https://github.com/user-attachments/assets/7080d881-bdcc-41e9-9cb2-719cddcb4e74)
+![Welcome Light Theme](docs/screenshots/welcome-light.png)
 
 ### Welcome Screen (Dark Theme)
-![Welcome Dark Theme](https://github.com/user-attachments/assets/e6fb3825-73d8-4d3f-bb3c-01e32d339f92)
+![Welcome Dark Theme](docs/screenshots/welcome-dark.png)
 
 ### Voting Room
-![Voting Room](https://github.com/user-attachments/assets/cc9ef640-86ad-42a6-8d32-b5327f3181a5)
+![Voting Room](docs/screenshots/voting-room.png)
 
 ### Card Selected State
-![Card Selected](https://github.com/user-attachments/assets/42da6754-de28-40ae-a093-fff2daac7c25)
+![Card Selected](docs/screenshots/card-selected.png)
 
 ### Revealed Results
-![Revealed Results](https://github.com/user-attachments/assets/8117ecda-cffa-463a-8eaf-0c7bbab0a8ab)
+![Revealed Results](docs/screenshots/revealed-results.png)
 
 ## Features
 
