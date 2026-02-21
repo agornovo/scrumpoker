@@ -557,20 +557,7 @@ describe('Socket.IO Reveal and Statistics', () => {
     const client1 = Client(serverUrl);
     const client2 = Client(serverUrl);
     
-    let joinCount = 0;
     let revealReceived = false;
-    
-    const handleJoin = () => {
-      joinCount++;
-      if (joinCount === 2) {
-        client1.emit('vote', { roomId: 'OBSSTAT', vote: 5 });
-        client2.emit('vote', { roomId: 'OBSSTAT', vote: 100 }); // Observer vote should be ignored
-        
-        setTimeout(() => {
-          client1.emit('reveal', { roomId: 'OBSSTAT' });
-        }, 100);
-      }
-    };
     
     client1.on('room-update', (data) => {
       if (!revealReceived && data.revealed) {
@@ -582,15 +569,22 @@ describe('Socket.IO Reveal and Statistics', () => {
         client1.disconnect();
         client2.disconnect();
         done();
-      } else if (joinCount < 2) {
-        handleJoin();
       }
     });
     
-    client2.on('room-update', handleJoin);
-    
+    // Join client1 first and wait for confirmation so it is guaranteed to be the room creator.
     client1.emit('join-room', { roomId: 'OBSSTAT', userName: 'Voter', isObserver: false });
-    client2.emit('join-room', { roomId: 'OBSSTAT', userName: 'Observer', isObserver: true });
+    client1.once('room-update', () => {
+      // client1 is now the confirmed creator; join client2 and trigger voting on its first update.
+      client2.once('room-update', () => {
+        client1.emit('vote', { roomId: 'OBSSTAT', vote: 5 });
+        // Observer vote should be ignored by statistics
+        setTimeout(() => {
+          client1.emit('reveal', { roomId: 'OBSSTAT' });
+        }, 100);
+      });
+      client2.emit('join-room', { roomId: 'OBSSTAT', userName: 'Observer', isObserver: true });
+    });
   });
   
   test('should calculate median correctly for even number of votes', (done) => {
