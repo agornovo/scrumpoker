@@ -292,6 +292,10 @@ header h1 {
 .palette-swatch[data-palette="crimson"] { background: #8b2228; }
 .palette-swatch[data-palette="slate"] { background: #455a64; }
 
+.hidden {
+  display: none !important;
+}
+
 .screen {
   display: block;
 }

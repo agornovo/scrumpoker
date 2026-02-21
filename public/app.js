@@ -514,17 +514,15 @@ socket.on('room-update', (data) => {
     btn.disabled = data.revealed;
   });
   
-  // Only the room creator can reveal and reset
+  // Only the room creator can see and use reveal and reset
   if (!isCreator) {
-    revealBtn.disabled = true;
-    resetBtn.disabled = true;
-    revealBtn.title = 'Only the room creator can reveal cards';
-    resetBtn.title = 'Only the room creator can start a new round';
+    revealBtn.classList.add('hidden');
+    resetBtn.classList.add('hidden');
   } else {
+    revealBtn.classList.remove('hidden');
+    resetBtn.classList.remove('hidden');
     revealBtn.disabled = !hasVotes || data.revealed;
     resetBtn.disabled = !data.revealed;
-    revealBtn.title = '';
-    resetBtn.title = '';
   }
   
   // Sync local selection state with server state
