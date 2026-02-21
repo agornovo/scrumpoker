@@ -1120,7 +1120,10 @@ describe('Reveal and Reset Authorization', () => {
     participant.on('room-update', handleJoin);
     
     creatorObserver.emit('join-room', { roomId: 'OBSERVER_CREATOR', userName: 'CreatorObserver', isObserver: true });
-    participant.emit('join-room', { roomId: 'OBSERVER_CREATOR', userName: 'Participant', isObserver: false });
+    // Delay participant join to ensure creatorObserver is established as room creator first
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'OBSERVER_CREATOR', userName: 'Participant', isObserver: false });
+    }, 100);
   });
   
   test('room creator who is an observer should be able to reset votes', (done) => {
@@ -1165,7 +1168,10 @@ describe('Reveal and Reset Authorization', () => {
     participant.on('room-update', handleJoin);
     
     creatorObserver.emit('join-room', { roomId: 'OBSERVER_RESET', userName: 'CreatorObserver', isObserver: true });
-    participant.emit('join-room', { roomId: 'OBSERVER_RESET', userName: 'Participant', isObserver: false });
+    // Delay participant join to ensure creatorObserver is established as room creator first
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'OBSERVER_RESET', userName: 'Participant', isObserver: false });
+    }, 100);
   });
 });
 
