@@ -738,6 +738,42 @@ test.describe('Story Title', () => {
     await context2.close();
   });
 
+  test('should hide reveal and reset buttons for non-host', async ({ browser }) => {
+    const roomId = 'HOSTBTNS';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Wait for both to see each other
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+
+    // Non-host should not see reveal, reset, or auto-reveal buttons
+    await expect(page2.locator('#reveal-btn')).not.toBeVisible();
+    await expect(page2.locator('#reset-btn')).not.toBeVisible();
+    await expect(page2.locator('#auto-reveal-toggle')).not.toBeVisible();
+
+    // Host should see all three controls
+    await expect(page1.locator('#reveal-btn')).toBeVisible();
+    await expect(page1.locator('#reset-btn')).toBeVisible();
+    await expect(page1.locator('#auto-reveal-toggle')).toBeVisible();
+
+    await context1.close();
+    await context2.close();
+  });
+
   test('should not show story title input to non-host', async ({ browser }) => {
     const roomId = 'STORYHOST';
 
