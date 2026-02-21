@@ -110,6 +110,35 @@ function clearCardSelection() {
   cardsContainer.querySelectorAll('.card-button').forEach(btn => btn.classList.remove('selected'));
 }
 
+// Animation constants
+const CONFETTI_PARTICLE_COUNT = 80;
+const VOTE_FLIP_DELAY_INCREMENT_MS = 100;
+const VOTE_FLIP_MAX_DELAY_MS = 600;
+const MIN_VOTERS_FOR_CONSENSUS = 2;
+
+// Launch confetti celebration (palette-aware + classic colors)
+function triggerConfetti() {
+  const style = getComputedStyle(document.documentElement);
+  const primaryColor = style.getPropertyValue('--primary-color').trim();
+  const successColor = style.getPropertyValue('--success-color').trim();
+  const warningColor = style.getPropertyValue('--warning-color').trim();
+  const colors = [primaryColor, successColor, warningColor, '#e74c3c', '#f39c12', '#3498db', '#9b59b6', '#e91e63'];
+
+  for (let i = 0; i < CONFETTI_PARTICLE_COUNT; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-particle';
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const size = Math.random() * 8 + 6;
+    const left = Math.random() * 100;
+    const duration = Math.random() * 2 + 1.5;
+    const delay = Math.random() * 0.6;
+    const isCircle = Math.random() > 0.4;
+    el.style.cssText = `left:${left}vw;width:${size}px;height:${size}px;background:${color};border-radius:${isCircle ? '50%' : '2px'};animation-duration:${duration}s;animation-delay:${delay}s;`;
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+}
+
 // State
 let currentRoomId = null;
 let currentUserName = null;
@@ -117,6 +146,7 @@ let isObserver = false;
 let isRevealed = false;
 let selectedVote = null;
 let currentCardSet = 'standard';
+let wasRevealed = false;
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
 const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
 
@@ -207,6 +237,8 @@ joinBtn.addEventListener('click', () => {
   // Show voting screen
   welcomeScreen.classList.add('hidden');
   votingScreen.classList.remove('hidden');
+  votingScreen.classList.add('screen-enter');
+  votingScreen.addEventListener('animationend', () => votingScreen.classList.remove('screen-enter'), { once: true });
   currentRoomIdDisplay.textContent = currentRoomId;
 
   // Hide card selection for observers
@@ -360,6 +392,8 @@ resetBtn.addEventListener('click', () => {
 // Handle room updates
 socket.on('room-update', (data) => {
   // Track revealed state
+  const justRevealed = data.revealed && !wasRevealed;
+  wasRevealed = data.revealed;
   isRevealed = data.revealed;
 
   // Update card deck if it changed
@@ -373,7 +407,7 @@ socket.on('room-update', (data) => {
   participantsList.innerHTML = '';
   participantCount.textContent = data.users.length;
 
-  data.users.forEach(user => {
+  data.users.forEach((user, index) => {
     const card = document.createElement('div');
     card.className = 'participant-card';
     
@@ -412,6 +446,10 @@ socket.on('room-update', (data) => {
       voteDiv.style.color = '#6c757d';
     } else if (data.revealed) {
       voteDiv.textContent = user.vote !== null ? user.vote : '-';
+      if (justRevealed && user.vote !== null) {
+        voteDiv.style.animationDelay = `${Math.min(index * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS)}ms`;
+        voteDiv.classList.add('flip-reveal');
+      }
     } else if (user.vote === 'voted') {
       voteDiv.textContent = '✓';
       voteDiv.classList.add('hidden-vote');
@@ -448,6 +486,17 @@ socket.on('room-update', (data) => {
     statMedian.textContent = data.stats.median;
     statMin.textContent = data.stats.min;
     statMax.textContent = data.stats.max;
+
+    if (justRevealed) {
+      statistics.classList.add('animate-in');
+      statistics.addEventListener('animationend', () => statistics.classList.remove('animate-in'), { once: true });
+
+      // Confetti when all voters agree
+      const voters = data.users.filter(u => !u.isObserver && u.vote !== null);
+      if (voters.length >= MIN_VOTERS_FOR_CONSENSUS && data.stats.min === data.stats.max) {
+        triggerConfetti();
+      }
+    }
   } else {
     statistics.classList.add('hidden');
     statAvg.textContent = '-';
