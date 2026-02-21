@@ -1152,3 +1152,57 @@ footer .footer-link:hover {
   z-index: 9999;
   animation: confetti-fall linear forwards;
 }
+
+/* Firework burst sparks */
+@keyframes spark-fly {
+  0% {
+    transform: rotate(var(--angle)) translateX(0) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle)) translateX(var(--distance)) scale(0);
+    opacity: 0;
+  }
+}
+
+.firework-spark {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 50%;
+  transform-origin: center;
+  animation: spark-fly ease-out forwards;
+}
+
+/* Card selection sparkle glow */
+@keyframes card-sparkle {
+  0%   { filter: brightness(1); transform: scale(1); }
+  35%  { filter: brightness(1.5) drop-shadow(0 0 10px currentColor); transform: scale(1.12); }
+  70%  { filter: brightness(1.1); transform: scale(0.97); }
+  100% { filter: brightness(1); transform: scale(1); }
+}
+
+.card-button.card-sparkle {
+  animation: card-sparkle 0.45s ease-out;
+}
+
+/* Participant card "tada" bounce on vote reveal */
+@keyframes tada-bounce {
+  0%   { transform: scale(1) rotate(0deg); }
+  10%  { transform: scale(0.9) rotate(-3deg); }
+  20%  { transform: scale(1.1) rotate(3deg); }
+  30%  { transform: scale(1.1) rotate(-3deg); }
+  40%  { transform: scale(1.1) rotate(3deg); }
+  50%  { transform: scale(1.1) rotate(-1deg); }
+  60%  { transform: scale(1.05) rotate(1deg); }
+  70%  { transform: scale(1.05) rotate(-1deg); }
+  80%  { transform: scale(1.05) rotate(1deg); }
+  90%  { transform: scale(1) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.participant-card.tada-bounce {
+  animation: tada-bounce 0.8s ease;
+  z-index: 10;
+  position: relative;
+}
