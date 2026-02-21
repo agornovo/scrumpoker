@@ -30,6 +30,7 @@ const storyTitleDisplay = document.getElementById('story-title-display');
 const autoRevealToggle = document.getElementById('auto-reveal-toggle');
 const autoRevealCheckbox = document.getElementById('auto-reveal-checkbox');
 const specialEffectsCheckbox = document.getElementById('special-effects');
+const muteSoundBtn = document.getElementById('mute-sound-btn');
 
 // Card deck definitions
 const CARD_DECKS = {
@@ -127,6 +128,7 @@ const TADA_BOUNCE_SETTLE_DELAY_MS = 900;
 // Sound effects synthesised via Web Audio API – no audio files required
 const SoundEffects = (() => {
   let audioCtx = null;
+  let muted = false;
 
   function getCtx() {
     if (!window.AudioContext && !window.webkitAudioContext) return null;
@@ -154,13 +156,18 @@ const SoundEffects = (() => {
   }
 
   return {
+    isMuted() { return muted; },
+    setMuted(val) { muted = val; },
+
     // Soft "pip" when picking a card
     cardSelect() {
+      if (muted) return;
       tone(880, 0.09, 'sine', 0.12);
     },
 
     // Quick ascending whoosh when votes are revealed
     reveal() {
+      if (muted) return;
       const ctx = getCtx();
       if (!ctx) return;
       const osc = ctx.createOscillator();
@@ -177,11 +184,41 @@ const SoundEffects = (() => {
       osc.onended = () => { osc.disconnect(); gainNode.disconnect(); };
     },
 
-    // Three-note ascending fanfare for consensus celebration
-    fanfare() {
-      tone(523, 0.22, 'sine', 0.18, 0.0);   // C5
-      tone(659, 0.22, 'sine', 0.18, 0.15);  // E5
-      tone(784, 0.35, 'sine', 0.20, 0.30);  // G5
+    // Crowd cheer for fireworks/confetti consensus celebration
+    cheer() {
+      if (muted) return;
+      const ctx = getCtx();
+      if (!ctx) return;
+      const duration = 1.8;
+      const bufferSize = Math.ceil(ctx.sampleRate * duration);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(500, ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(1500, ctx.currentTime + 1.0);
+      filter.Q.value = 1.5;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0, ctx.currentTime);
+      noiseGain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.2);
+      noiseGain.gain.setValueAtTime(0.3, ctx.currentTime + 1.0);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noise.start(ctx.currentTime);
+      noise.stop(ctx.currentTime + duration);
+      noise.onended = () => { noise.disconnect(); filter.disconnect(); noiseGain.disconnect(); };
+      // Rising tones to complement the crowd noise
+      tone(392, 0.25, 'sine', 0.13, 0.0);   // G4
+      tone(494, 0.25, 'sine', 0.13, 0.2);   // B4
+      tone(587, 0.30, 'sine', 0.15, 0.4);   // D5
+      tone(784, 0.50, 'sine', 0.17, 0.6);   // G5
     }
   };
 })();
@@ -211,7 +248,7 @@ function triggerConfetti(superMode = false) {
 
   if (superMode) {
     triggerFireworks();
-    SoundEffects.fanfare();
+    SoundEffects.cheer();
   }
 }
 
@@ -261,6 +298,7 @@ let wasRevealed = false;
 let specialEffectsEnabled = false;
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
 const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
+const SOUND_MUTED_STORAGE_KEY = 'scrumpoker-sound-muted';
 
 // Initialize cards with the default deck
 renderCards(currentCardSet);
@@ -320,6 +358,34 @@ paletteSwatches.forEach(btn => {
       console.warn('Palette preference could not be saved:', error);
     }
   });
+});
+
+// Mute sound button initialization
+function updateMuteButton() {
+  const muted = SoundEffects.isMuted();
+  muteSoundBtn.textContent = muted ? '🔇 Sounds off' : '🔊 Sounds on';
+  const label = muted ? 'Unmute sound effects' : 'Mute sound effects';
+  muteSoundBtn.setAttribute('aria-label', label);
+  muteSoundBtn.setAttribute('title', label);
+}
+
+let savedSoundMuted = false;
+try {
+  savedSoundMuted = localStorage.getItem(SOUND_MUTED_STORAGE_KEY) === 'true';
+} catch (error) {
+  console.warn('Sound mute preference could not be read:', error);
+}
+SoundEffects.setMuted(savedSoundMuted);
+updateMuteButton();
+
+muteSoundBtn.addEventListener('click', () => {
+  SoundEffects.setMuted(!SoundEffects.isMuted());
+  updateMuteButton();
+  try {
+    localStorage.setItem(SOUND_MUTED_STORAGE_KEY, SoundEffects.isMuted());
+  } catch (error) {
+    console.warn('Sound mute preference could not be saved:', error);
+  }
 });
 
 // Generate a random room ID
@@ -514,6 +580,13 @@ socket.on('room-update', (data) => {
 
   // Track special effects
   specialEffectsEnabled = !!data.specialEffects;
+
+  // Show mute button when special effects are enabled
+  if (specialEffectsEnabled) {
+    muteSoundBtn.classList.remove('hidden');
+  } else {
+    muteSoundBtn.classList.add('hidden');
+  }
 
   // Update card deck if it changed
   if (data.cardSet && data.cardSet !== currentCardSet) {
