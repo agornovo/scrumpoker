@@ -26,6 +26,11 @@ io.setMaxListeners(50); // Support up to 50 listeners (well above 20 users)
 
 const PORT = process.env.PORT || 8080;
 
+// Structured logger that prefixes every entry with an ISO-8601 timestamp
+function log(...args) {
+  console.log(new Date().toISOString(), ...args);
+}
+
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -91,7 +96,7 @@ const rooms = new Map();
 // }
 
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  log('New client connected:', socket.id);
 
   // Join a room
   socket.on('join-room', ({ roomId, userName, isObserver, cardSet }) => {
@@ -107,7 +112,7 @@ io.on('connection', (socket) => {
         storyTitle: '',
         autoReveal: false
       });
-      console.log('Created room:', roomId);
+      log('Created room:', roomId);
     }
 
     const room = rooms.get(roomId);
@@ -125,7 +130,7 @@ io.on('connection', (socket) => {
     // Store room ID in socket for cleanup
     socket.roomId = roomId;
 
-    console.log(`User ${userName} joined room ${roomId}`);
+    log(`User ${userName} joined room ${roomId}`);
 
     // Send current room state to all users in the room
     emitRoomUpdate(roomId);
@@ -143,7 +148,7 @@ io.on('connection', (socket) => {
     if (!user) return;
 
     user.vote = vote;
-    console.log(`User ${user.name} voted in room ${roomId}`);
+    log(`User ${user.name} voted in room ${roomId}`);
 
     // Auto-reveal: if enabled and all non-observer voters have voted, reveal cards
     if (room.autoReveal && !room.revealed) {
@@ -151,7 +156,7 @@ io.on('connection', (socket) => {
       const allVoted = voters.length > 0 && voters.every(u => u.vote !== null);
       if (allVoted) {
         room.revealed = true;
-        console.log(`Auto-revealed cards in room ${roomId}`);
+        log(`Auto-revealed cards in room ${roomId}`);
       }
     }
 
@@ -165,12 +170,12 @@ io.on('connection', (socket) => {
 
     // Only the room creator can reveal cards
     if (socket.id !== room.creatorId) {
-      console.log(`Unauthorized reveal attempt by ${socket.id} in room ${roomId}`);
+      log(`Unauthorized reveal attempt by ${socket.id} in room ${roomId}`);
       return;
     }
 
     room.revealed = true;
-    console.log(`Cards revealed in room ${roomId}`);
+    log(`Cards revealed in room ${roomId}`);
 
     emitRoomUpdate(roomId);
   });
@@ -182,7 +187,7 @@ io.on('connection', (socket) => {
 
     // Only the room creator can reset votes
     if (socket.id !== room.creatorId) {
-      console.log(`Unauthorized reset attempt by ${socket.id} in room ${roomId}`);
+      log(`Unauthorized reset attempt by ${socket.id} in room ${roomId}`);
       return;
     }
 
@@ -190,7 +195,7 @@ io.on('connection', (socket) => {
     room.users.forEach(user => {
       user.vote = null;
     });
-    console.log(`Votes reset in room ${roomId}`);
+    log(`Votes reset in room ${roomId}`);
 
     emitRoomUpdate(roomId);
   });
@@ -224,13 +229,13 @@ io.on('connection', (socket) => {
 
     // Only the room creator can remove participants
     if (socket.id !== room.creatorId) {
-      console.log(`Unauthorized remove attempt by ${socket.id} in room ${roomId}`);
+      log(`Unauthorized remove attempt by ${socket.id} in room ${roomId}`);
       return;
     }
 
     // Cannot remove yourself
     if (participantId === socket.id) {
-      console.log(`Room creator cannot remove themselves`);
+      log(`Room creator cannot remove themselves`);
       return;
     }
 
@@ -238,7 +243,7 @@ io.on('connection', (socket) => {
     if (room.users.has(participantId)) {
       const removedUser = room.users.get(participantId);
       room.users.delete(participantId);
-      console.log(`User ${removedUser.name} removed from room ${roomId} by creator`);
+      log(`User ${removedUser.name} removed from room ${roomId} by creator`);
 
       // Disconnect the removed user's socket
       const targetSocket = io.sockets.sockets.get(participantId);
@@ -254,7 +259,7 @@ io.on('connection', (socket) => {
 
   // Disconnect
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+    log('Client disconnected:', socket.id);
 
     const roomId = socket.roomId;
     if (roomId) {
@@ -265,7 +270,7 @@ io.on('connection', (socket) => {
         // Clean up empty rooms
         if (room.users.size === 0) {
           rooms.delete(roomId);
-          console.log('Deleted empty room:', roomId);
+          log('Deleted empty room:', roomId);
         } else {
           emitRoomUpdate(roomId);
         }
@@ -329,11 +334,15 @@ setInterval(() => {
   rooms.forEach((room, roomId) => {
     if (now - room.createdAt > dayInMs && room.users.size === 0) {
       rooms.delete(roomId);
-      console.log('Cleaned up old room:', roomId);
+      log('Cleaned up old room:', roomId);
     }
   });
 }, 60 * 60 * 1000); // Run every hour
 
-server.listen(PORT, () => {
-  console.log(`Scrum Poker server running on port ${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    log(`Scrum Poker server running on port ${PORT}`);
+  });
+}
+
+module.exports = { log };

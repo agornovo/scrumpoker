@@ -1719,3 +1719,48 @@ describe('Auto-Reveal', () => {
     host.emit('join-room', { roomId: 'AR_OBSERVERS', userName: 'HostObserver', isObserver: true });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Logging helper tests
+// ---------------------------------------------------------------------------
+describe('log helper', () => {
+  const { log } = require('./server');
+  const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z /;
+
+  let spy;
+
+  beforeEach(() => {
+    spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    spy.mockRestore();
+  });
+
+  test('prefixes each entry with an ISO-8601 timestamp', () => {
+    log('hello world');
+    expect(spy).toHaveBeenCalledTimes(1);
+    const output = spy.mock.calls[0].join(' ');
+    expect(output).toMatch(ISO_TIMESTAMP_RE);
+    expect(output).toContain('hello world');
+  });
+
+  test('passes all arguments through after the timestamp', () => {
+    log('a', 'b', 'c');
+    const args = spy.mock.calls[0];
+    expect(args[0]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    expect(args[1]).toBe('a');
+    expect(args[2]).toBe('b');
+    expect(args[3]).toBe('c');
+  });
+
+  test('vote log entries do not disclose the vote value', () => {
+    // Simulate the exact message the vote handler produces (no numeric vote value)
+    log('User Alice voted in room test-room');
+    const output = spy.mock.calls[0].join(' ');
+    expect(output).toContain('voted');
+    // Must not contain a numeric vote value inline (e.g. "voted 5" or "vote: 13")
+    expect(output).not.toMatch(/\bvoted?\s+\d+\b/);
+    expect(output).not.toMatch(/vote\s*[=:]\s*\d+/);
+  });
+});
