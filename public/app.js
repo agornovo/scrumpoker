@@ -112,8 +112,8 @@ function clearCardSelection() {
 
 // Animation constants
 const CONFETTI_PARTICLE_COUNT = 80;
-const VOTE_FLIP_DELAY_INCREMENT_MS = 100;
-const VOTE_FLIP_MAX_DELAY_MS = 600;
+const VOTE_FLIP_DELAY_INCREMENT_MS = 200;
+const VOTE_FLIP_MAX_DELAY_MS = 1200;
 const MIN_VOTERS_FOR_CONSENSUS = 2;
 
 // Launch confetti celebration (palette-aware + classic colors)
@@ -130,8 +130,8 @@ function triggerConfetti() {
     const color = colors[Math.floor(Math.random() * colors.length)];
     const size = Math.random() * 8 + 6;
     const left = Math.random() * 100;
-    const duration = Math.random() * 2 + 1.5;
-    const delay = Math.random() * 0.6;
+    const duration = Math.random() * 2 + 2.5;
+    const delay = Math.random() * 1.2;
     const isCircle = Math.random() > 0.4;
     el.style.cssText = `left:${left}vw;width:${size}px;height:${size}px;background:${color};border-radius:${isCircle ? '50%' : '2px'};animation-duration:${duration}s;animation-delay:${delay}s;`;
     document.body.appendChild(el);

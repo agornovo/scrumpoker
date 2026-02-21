@@ -643,7 +643,7 @@ header h1 {
   border: 2px solid var(--border-color);
   position: relative;
   box-shadow: var(--shadow-sm);
-  animation: card-enter 0.25s ease-out;
+  animation: card-enter 0.45s ease-out;
 }
 
 .participant-card:hover {
@@ -1095,7 +1095,7 @@ footer .footer-link:hover {
 }
 
 .screen-enter {
-  animation: screen-slide-in 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: screen-slide-in 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Vote reveal flip */
@@ -1107,7 +1107,7 @@ footer .footer-link:hover {
 }
 
 .participant-vote.flip-reveal {
-  animation: vote-flip 0.45s ease-in-out;
+  animation: vote-flip 0.8s ease-in-out;
 }
 
 /* Statistics section entrance */
@@ -1123,7 +1123,7 @@ footer .footer-link:hover {
 }
 
 .statistics.animate-in {
-  animation: stats-enter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: stats-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Confetti celebration */
