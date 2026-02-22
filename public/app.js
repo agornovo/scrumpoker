@@ -34,6 +34,8 @@ const specialEffectsCheckbox = document.getElementById('special-effects');
 const muteSoundBtn = document.getElementById('mute-sound-btn');
 const roundHistorySection = document.getElementById('round-history');
 const roundHistoryList = document.getElementById('round-history-list');
+const becomeHostBanner = document.getElementById('become-host-banner');
+const becomeHostBtn = document.getElementById('become-host-btn');
 
 // Card deck definitions
 const CARD_DECKS = {
@@ -629,6 +631,7 @@ leaveRoomBtn.addEventListener('click', () => {
 
   welcomeScreen.classList.remove('hidden');
   votingScreen.classList.add('hidden');
+  becomeHostBanner.classList.add('hidden');
   
   // Reset form
   roomIdInput.value = '';
@@ -917,6 +920,11 @@ socket.on('room-update', (data) => {
   const hasVotes = data.users.some(u => !u.isObserver && u.vote !== null);
   isCreator = data.creatorId === socket.id;
 
+  // Hide the become-host banner once a host is present in the room
+  if (data.users.some(u => u.id === data.creatorId)) {
+    becomeHostBanner.classList.add('hidden');
+  }
+
   // Disable card selection when votes are revealed
   cardsContainer.querySelectorAll('.card-button').forEach(btn => {
     btn.disabled = data.revealed;
@@ -981,6 +989,7 @@ socket.on('removed-from-room', () => {
   // Return to welcome screen
   welcomeScreen.classList.remove('hidden');
   votingScreen.classList.add('hidden');
+  becomeHostBanner.classList.add('hidden');
   currentRoomId = null;
   currentUserName = null;
   selectedVote = null;
@@ -996,6 +1005,17 @@ socket.on('removed-from-room', () => {
   } catch (e) {
     // URL API not available
   }
+});
+
+// Handle host absence: show the become-host option to all remaining participants
+socket.on('host-absent', () => {
+  becomeHostBanner.classList.remove('hidden');
+});
+
+// Become host button
+becomeHostBtn.addEventListener('click', () => {
+  socket.emit('claim-host', { roomId: currentRoomId });
+  becomeHostBanner.classList.add('hidden');
 });
 
 // Connection status

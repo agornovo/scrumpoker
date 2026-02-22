@@ -9,7 +9,7 @@ const VERIFICATION_DELAY_MS = 1000; // Time to wait for all clients to receive f
 const BATCH_JOIN_DELAY_MS = 500; // Time between batches of users joining
 
 // Create a test server for each test
-function createTestServer({ reconnectGracePeriodMs = 0 } = {}) {
+function createTestServer({ reconnectGracePeriodMs = 0, hostAbsentTimeoutMs = 0 } = {}) {
   const app = express();
   const server = http.createServer(app);
   const io = socketIo(server);
@@ -50,6 +50,10 @@ function createTestServer({ reconnectGracePeriodMs = 0 } = {}) {
 
           if (room.creatorId === pending.oldSocketId) {
             room.creatorId = socket.id;
+            if (room.hostAbsentTimer) {
+              clearTimeout(room.hostAbsentTimer);
+              room.hostAbsentTimer = null;
+            }
           }
 
           socket.join(roomId);
@@ -82,7 +86,8 @@ function createTestServer({ reconnectGracePeriodMs = 0 } = {}) {
         cardSet: cardSet || 'standard',
         storyTitle: '',
         autoReveal: false,
-        specialEffects: !!specialEffects
+        specialEffects: !!specialEffects,
+        hostAbsentTimer: null
       });
     }
       
@@ -213,25 +218,52 @@ function createTestServer({ reconnectGracePeriodMs = 0 } = {}) {
               pendingRemovals.delete(clientId);
               const r = rooms.get(roomId);
               if (r) {
+                const wasHost = r.creatorId === oldSocketId;
                 r.users.delete(oldSocketId);
                 if (r.users.size === 0) {
                   rooms.delete(roomId);
                 } else {
+                  if (wasHost) {
+                    r.hostAbsentTimer = setTimeout(() => {
+                      r.hostAbsentTimer = null;
+                      io.to(roomId).emit('host-absent', { roomId });
+                    }, hostAbsentTimeoutMs);
+                  }
                   emitRoomUpdate(roomId);
                 }
               }
             }, reconnectGracePeriodMs);
             pendingRemovals.set(clientId, { timer, roomId, oldSocketId, userData });
           } else {
+            const wasHost = room.creatorId === socket.id;
             room.users.delete(socket.id);
             if (room.users.size === 0) {
               rooms.delete(roomId);
             } else {
+              if (wasHost) {
+                room.hostAbsentTimer = setTimeout(() => {
+                  room.hostAbsentTimer = null;
+                  io.to(roomId).emit('host-absent', { roomId });
+                }, hostAbsentTimeoutMs);
+              }
               emitRoomUpdate(roomId);
             }
           }
         }
       }
+    });
+
+    socket.on('claim-host', ({ roomId }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+      if (!room.users.has(socket.id)) return;
+      if (room.users.has(room.creatorId)) return;
+      if (room.hostAbsentTimer) {
+        clearTimeout(room.hostAbsentTimer);
+        room.hostAbsentTimer = null;
+      }
+      room.creatorId = socket.id;
+      emitRoomUpdate(roomId);
     });
     
     function emitRoomUpdate(roomId) {
@@ -2013,4 +2045,185 @@ describe('log helper', () => {
     expect(output).not.toMatch(/\bvoted?\s+\d+\b/);
     expect(output).not.toMatch(/vote\s*[=:]\s*\d+/);
   });
+});
+
+describe('Host Takeover', () => {
+  const HOST_ABSENT_MS = 50; // fast timer for tests
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer({ hostAbsentTimeoutMs: HOST_ABSENT_MS });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('emits host-absent to remaining participants after host disconnects', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Host disconnects without a clientId (immediate removal) 
+        host.disconnect();
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    participant.on('host-absent', (data) => {
+      expect(data.roomId).toBe('HT_ABSENT');
+      participant.disconnect();
+      done();
+    });
+
+    host.emit('join-room', { roomId: 'HT_ABSENT', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'HT_ABSENT', userName: 'Participant', isObserver: false });
+    }, 50);
+  }, 5000);
+
+  test('allows a participant to claim host when host is absent', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+    let hostAbsentReceived = false;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        host.disconnect();
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', (data) => {
+      handleJoin();
+      if (hostAbsentReceived && data.creatorId === participant.id) {
+        // Participant is now the host
+        expect(data.creatorId).toBe(participant.id);
+        participant.disconnect();
+        done();
+      }
+    });
+
+    participant.on('host-absent', () => {
+      hostAbsentReceived = true;
+      participant.emit('claim-host', { roomId: 'HT_CLAIM' });
+    });
+
+    host.emit('join-room', { roomId: 'HT_CLAIM', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'HT_CLAIM', userName: 'Participant', isObserver: false });
+    }, 50);
+  }, 5000);
+
+  test('does not emit host-absent when only one user is in the room', (done) => {
+    const host = Client(serverUrl);
+    let hostAbsentCalled = false;
+
+    host.on('room-update', () => {
+      host.disconnect();
+    });
+
+    host.on('host-absent', () => {
+      hostAbsentCalled = true;
+    });
+
+    host.emit('join-room', { roomId: 'HT_SOLO', userName: 'Host', isObserver: false });
+
+    setTimeout(() => {
+      expect(hostAbsentCalled).toBe(false);
+      done();
+    }, HOST_ABSENT_MS + 200);
+  }, 5000);
+
+  test('does not allow a non-participant to claim host', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    const outsider = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        host.disconnect();
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    participant.on('host-absent', () => {
+      // Outsider (in a different room) tries to claim host – should be silently ignored
+      outsider.emit('claim-host', { roomId: 'HT_OUTSIDER' });
+
+      setTimeout(() => {
+        const room = rooms.get('HT_OUTSIDER');
+        // creatorId should NOT have changed to the outsider
+        expect(room.creatorId).not.toBe(outsider.id);
+        host.disconnect();
+        participant.disconnect();
+        outsider.disconnect();
+        done();
+      }, 200);
+    });
+
+    // Outsider joins a different room
+    outsider.emit('join-room', { roomId: 'HT_OTHER', userName: 'Outsider', isObserver: false });
+
+    host.emit('join-room', { roomId: 'HT_OUTSIDER', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'HT_OUTSIDER', userName: 'Participant', isObserver: false });
+    }, 50);
+  }, 5000);
+
+  test('does not allow claim-host when host is still present', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = (data) => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Participant tries to claim host while host is still present
+        participant.emit('claim-host', { roomId: 'HT_PRESENT' });
+
+        setTimeout(() => {
+          const room = rooms.get('HT_PRESENT');
+          // creatorId should remain the original host
+          expect(room.creatorId).toBe(host.id);
+          host.disconnect();
+          participant.disconnect();
+          done();
+        }, 200);
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    host.emit('join-room', { roomId: 'HT_PRESENT', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'HT_PRESENT', userName: 'Participant', isObserver: false });
+    }, 50);
+  }, 5000);
 });

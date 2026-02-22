@@ -851,3 +851,52 @@ test.describe('Auto-Reveal', () => {
     await context2.close();
   });
 });
+
+test.describe('Host Takeover', () => {
+  test('should offer participants a "Become Host" option after the host leaves', async ({ browser }) => {
+    const roomId = 'HOSTTAKEOVER';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    // Host joins first
+    await page1.goto(BASE_URL);
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    // Participant joins
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Both should be in the room
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+    await expect(page2.locator('#participant-count')).toHaveText('2');
+
+    // Host leaves by closing their browser context
+    await context1.close();
+
+    // Become-host banner should appear for the remaining participant
+    // (server uses RECONNECT_GRACE_PERIOD_MS=100 + HOST_TAKEOVER_TIMEOUT_MS=500 in test mode)
+    await expect(page2.locator('#become-host-banner')).not.toHaveClass(/hidden/, { timeout: 5000 });
+
+    // Participant clicks "Become Host"
+    await page2.click('#become-host-btn');
+
+    // Participant should now be the host: host controls become visible
+    await expect(page2.locator('#reveal-btn')).toBeVisible();
+    await expect(page2.locator('#reset-btn')).toBeVisible();
+    await expect(page2.locator('#auto-reveal-toggle')).toBeVisible();
+    await expect(page2.locator('#story-title-input')).toBeVisible();
+
+    // Banner should be hidden after becoming host
+    await expect(page2.locator('#become-host-banner')).toHaveClass(/hidden/);
+
+    await context2.close();
+  });
+});

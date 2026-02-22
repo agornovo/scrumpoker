@@ -26,5 +26,10 @@ module.exports = defineConfig({
     url: 'http://localhost:8080',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
+    env: {
+      // Short timeouts so E2E host-takeover tests don't wait a full minute
+      RECONNECT_GRACE_PERIOD_MS: '100',
+      HOST_TAKEOVER_TIMEOUT_MS: '500',
+    },
   },
 });
