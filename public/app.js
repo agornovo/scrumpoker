@@ -508,8 +508,6 @@ joinBtn.addEventListener('click', () => {
     clientId
   });
 
-  saveSession();
-
   // Update URL with room ID for easy link sharing
   try {
     const url = new URL(window.location.href);
@@ -518,6 +516,8 @@ joinBtn.addEventListener('click', () => {
   } catch (e) {
     // URL API not available
   }
+
+  saveSession();
 
   // Show voting screen
   welcomeScreen.classList.add('hidden');
