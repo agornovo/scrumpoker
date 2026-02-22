@@ -34,3 +34,12 @@ Only proceed to `code_review` and `codeql_checker` once all tests pass locally.
 Always supply relevant screenshots on pull requests that include any UI or visual changes.
 Take screenshots of all affected states (e.g. welcome screen, voting room, revealed results) and embed them in the PR description or commit them to `docs/screenshots/`.
 This helps reviewers verify the visual impact without having to run the app.
+
+## README Must Stay Current
+
+Whenever you add, change, or remove a feature, **always update `README.md`** in the same PR to reflect the new state:
+
+- Add new features to the **Features** list.
+- Update the **Card Values** table, **How to Use** steps, or any other section that describes the changed behaviour.
+- Replace the screenshots in `docs/screenshots/` with fresh ones that show the new UI, and update any image references in `README.md`.
+- Keep the **Prerequisites** Node.js version and the **Continuous Integration** node matrix in sync with `.github/workflows/ci.yml`.

@@ -26,11 +26,18 @@ A real-time networked scrum poker application for agile teams to estimate user s
 - 🎴 **Multiple Card Sets** - Choose from Standard [1-100], Fibonacci, T-Shirt Sizes, or Powers of 2
 - 👥 **Observer Mode** - Join as an observer without voting
 - 🌓 **Theme Toggle** - Switch between light and dark themes (saved per browser)
+- 🎨 **Color Palettes** - 8 built-in color palettes (Ocean, Forest, Sunset, Violet, Rose, Teal, Crimson, Slate)
+- 📝 **Story Title** - Host can label each round with a story title or ticket number
+- ⚡ **Auto-reveal** - Optionally reveal cards automatically once every voter has voted
+- 🎉 **Special Effects** - Optional confetti, fireworks, and sound effects when the team reaches consensus
+- 📜 **Round History** - Session log of past rounds shown after each reveal
+- 🔗 **Shareable URL** - Room link auto-updates with `?room=` so you can share it directly from the address bar
 - 📘 **Estimation Help Section** - In-app guidance on usage, Fibonacci sizing, and story points
 - 👑 **Host Controls** - Room creator can reveal/reset rounds and remove participants
+- 🔄 **Reconnect Grace Period** - Page refreshes preserve your vote and room membership
 - 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
 - 🔒 **Room-based Sessions** - Private rooms with unique IDs for team privacy
-- ⚡ **WebSocket Communication** - Fast, real-time updates using Socket.IO
+- 🔌 **WebSocket Communication** - Fast, real-time updates using Socket.IO
 
 ## Card Values
 
@@ -49,7 +56,7 @@ The card set is chosen by the room creator at join time and applies to all parti
 
 ### Prerequisites
 
-- Node.js 14 or higher
+- Node.js 18 or higher
 - npm
 
 ### Installation
@@ -140,7 +147,7 @@ E2E tests cover:
 The project uses GitHub Actions for CI/CD. The workflow runs:
 - Unit tests with coverage reporting
 - E2E tests with Playwright
-- Tests on Node.js 18.x and 20.x
+- Tests on Node.js 18.x, 20.x, and 24.x
 
 CI runs automatically on:
 - Push to main/master branches
@@ -186,29 +193,41 @@ The deployment includes:
    - Either enter an existing Room ID or leave blank to create a new one
    - Optionally check "Join as Observer" to watch without voting
    - Select a **Card Set** (Standard, Fibonacci, T-Shirt Sizes, or Powers of 2) — applies when creating a new room
+   - Optionally enable **Special Effects** (confetti, fireworks, and sounds on consensus) — applies when creating a new room
    - Click "Join Room"
 
 2. **Share the Room**
    - Share the Room ID with your team members
    - Use the copy button (📋) for easy sharing
+   - Use the link button (🔗) to copy a direct shareable URL
 
-3. **Vote**
+3. **Set the Story (Host only)**
+   - Type a story title or ticket number in the **Current Story** field
+   - The title is broadcast to all participants in real time
+
+4. **Vote**
    - Select a card that represents your estimate
    - Your vote is hidden from others until revealed
    - A checkmark (✓) shows who has voted
+   - Enable **Auto-reveal** to automatically reveal when every voter has voted
 
-4. **Reveal Cards**
+5. **Reveal Cards**
    - The room host clicks "Reveal Cards" after everyone has voted
    - All votes are shown simultaneously
-   - Statistics are calculated automatically
+   - Statistics (average, median, min, max) are calculated automatically
 
-5. **Start New Round**
+6. **Start New Round**
    - The room host clicks "New Round" to reset all votes
+   - The completed round is added to the **Round History**
    - Keep the same room and participants
 
-6. **Use Estimation Guidance**
+7. **Use Estimation Guidance**
    - Open the help section on the welcome screen
    - Review guidance on Scrum Poker purpose, Fibonacci sizing, and story points
+
+8. **Personalize the UI**
+   - Switch between **Light** and **Dark** themes
+   - Choose one of 8 **Color Palettes** (Ocean, Forest, Sunset, Violet, Rose, Teal, Crimson, Slate)
 
 ## Architecture
 
