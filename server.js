@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const { execSync } = require('child_process');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -46,8 +47,16 @@ app.get('/ready', (req, res) => {
 // Cache commit info to avoid repeated git command execution
 let cachedCommitInfo = null;
 
+// Rate limiter for commit info endpoint to prevent abuse of system command execution
+const commitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60, // limit each IP to 60 requests per windowMs for this endpoint
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false,  // Disable the `X-RateLimit-*` headers
+});
+
 // Get commit info endpoint
-app.get('/api/commit', (req, res) => {
+app.get('/api/commit', commitLimiter, (req, res) => {
   try {
     // Return cached result if available
     if (cachedCommitInfo) {
