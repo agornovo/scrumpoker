@@ -189,36 +189,65 @@ const SoundEffects = (() => {
       if (muted) return;
       const ctx = getCtx();
       if (!ctx) return;
-      const duration = 1.8;
-      const bufferSize = Math.ceil(ctx.sampleRate * duration);
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(500, ctx.currentTime);
-      filter.frequency.exponentialRampToValueAtTime(1500, ctx.currentTime + 1.0);
-      filter.Q.value = 1.5;
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0, ctx.currentTime);
-      noiseGain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.2);
-      noiseGain.gain.setValueAtTime(0.3, ctx.currentTime + 1.0);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      noise.connect(filter);
-      filter.connect(noiseGain);
-      noiseGain.connect(ctx.destination);
-      noise.start(ctx.currentTime);
-      noise.stop(ctx.currentTime + duration);
-      noise.onended = () => { noise.disconnect(); filter.disconnect(); noiseGain.disconnect(); };
-      // Rising tones to complement the crowd noise
-      tone(392, 0.25, 'sine', 0.13, 0.0);   // G4
-      tone(494, 0.25, 'sine', 0.13, 0.2);   // B4
-      tone(587, 0.30, 'sine', 0.15, 0.4);   // D5
-      tone(784, 0.50, 'sine', 0.17, 0.6);   // G5
+      const duration = 2.5;
+      // Three noise bands for low, mid, and high vocal registers with AM tremolo
+      [
+        { center: 350, q: 2.5, peak: 0.20, delay: 0.00 },
+        { center: 750, q: 2.0, peak: 0.28, delay: 0.04 },
+        { center: 1500, q: 1.8, peak: 0.14, delay: 0.08 },
+      ].forEach(({ center, q, peak, delay }) => {
+        const bufSize = Math.ceil(ctx.sampleRate * duration);
+        const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        const t0 = ctx.currentTime + delay;
+        filt.frequency.setValueAtTime(center, t0);
+        filt.frequency.exponentialRampToValueAtTime(center * 1.6, t0 + 1.2);
+        filt.Q.value = q;
+        // LFO for crowd wavering (AM modulation 5-8 Hz per band)
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.value = 5 + delay * 37.5;
+        lfoGain.gain.value = peak * 0.3;
+        lfo.connect(lfoGain);
+        const ampGain = ctx.createGain();
+        ampGain.gain.setValueAtTime(0.001, t0);
+        ampGain.gain.linearRampToValueAtTime(peak, t0 + 0.18);
+        ampGain.gain.setValueAtTime(peak, t0 + duration * 0.65);
+        ampGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        lfoGain.connect(ampGain.gain);
+        src.connect(filt);
+        filt.connect(ampGain);
+        ampGain.connect(ctx.destination);
+        lfo.start(t0);
+        lfo.stop(ctx.currentTime + duration);
+        src.start(t0);
+        src.stop(ctx.currentTime + duration);
+        src.onended = () => { src.disconnect(); filt.disconnect(); ampGain.disconnect(); lfo.disconnect(); lfoGain.disconnect(); };
+      });
+      // Staggered rising "woo!" sweeps simulating individual voices
+      [
+        [280, 480, 0.10], [350, 580, 0.28], [320, 540, 0.50], [400, 660, 0.72],
+      ].forEach(([f0, f1, offset]) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.type = 'sine';
+        const t = ctx.currentTime + offset;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(f1, t + 0.45);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.linearRampToValueAtTime(0.11, t + 0.1);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+        osc.start(t);
+        osc.stop(t + 0.55);
+        osc.onended = () => { osc.disconnect(); g.disconnect(); };
+      });
     }
   };
 })();
