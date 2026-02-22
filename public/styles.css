@@ -513,6 +513,19 @@ header h1 {
   transform: translateY(-1px);
 }
 
+/* Pair copy-room-id and copy-share-link as a single button group */
+#copy-room-id {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+#copy-share-link {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: 0;
+  border-left: none;
+}
+
 .help-text {
   margin-top: 24px;
   padding: 16px;
@@ -631,8 +644,9 @@ header h1 {
 
 .participants-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, 200px);
   gap: 15px;
+  justify-content: center;
 }
 
 .participant-card {
