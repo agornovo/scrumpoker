@@ -187,18 +187,22 @@ const SoundEffects = (() => {
       osc.onended = () => { osc.disconnect(); gainNode.disconnect(); };
     },
 
-    // Crowd cheer for fireworks/confetti consensus celebration
-    cheer() {
+    // Applause for fireworks/confetti consensus celebration – 3 s, natural buildup and fade
+    applause() {
       if (muted) return;
       const ctx = getCtx();
       if (!ctx) return;
-      const duration = 2.5;
-      // Three noise bands for low, mid, and high vocal registers with AM tremolo
+      const duration = 3.0;
+      const buildupEnd = 0.7;   // seconds until full volume
+      const fadeStart  = 2.3;   // seconds when fade begins
+      const t0 = ctx.currentTime;
+      const clapProgress = t => t < buildupEnd ? t / buildupEnd : (t > fadeStart ? (duration - t) / (duration - fadeStart) : 1.0);
+      // Crowd noise base: three bandpass-filtered white-noise bands
       [
-        { center: 350, q: 2.5, peak: 0.20, delay: 0.00 },
-        { center: 750, q: 2.0, peak: 0.28, delay: 0.04 },
-        { center: 1500, q: 1.8, peak: 0.14, delay: 0.08 },
-      ].forEach(({ center, q, peak, delay }) => {
+        { center: 400,  q: 1.2, peak: 0.12 },
+        { center: 1200, q: 1.8, peak: 0.20 },
+        { center: 2800, q: 2.2, peak: 0.10 },
+      ].forEach(({ center, q, peak }) => {
         const bufSize = Math.ceil(ctx.sampleRate * duration);
         const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
         const data = buf.getChannelData(0);
@@ -207,49 +211,49 @@ const SoundEffects = (() => {
         src.buffer = buf;
         const filt = ctx.createBiquadFilter();
         filt.type = 'bandpass';
-        const t0 = ctx.currentTime + delay;
-        filt.frequency.setValueAtTime(center, t0);
-        filt.frequency.exponentialRampToValueAtTime(center * 1.6, t0 + 1.2);
+        filt.frequency.value = center;
         filt.Q.value = q;
-        // LFO for crowd wavering (AM modulation 5-8 Hz per band)
-        const lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain();
-        lfo.frequency.value = 5 + delay * 37.5;
-        lfoGain.gain.value = peak * 0.3;
-        lfo.connect(lfoGain);
         const ampGain = ctx.createGain();
         ampGain.gain.setValueAtTime(0.001, t0);
-        ampGain.gain.linearRampToValueAtTime(peak, t0 + 0.18);
-        ampGain.gain.setValueAtTime(peak, t0 + duration * 0.65);
-        ampGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-        lfoGain.connect(ampGain.gain);
+        ampGain.gain.linearRampToValueAtTime(peak, t0 + buildupEnd);
+        ampGain.gain.setValueAtTime(peak, t0 + fadeStart);
+        ampGain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
         src.connect(filt);
         filt.connect(ampGain);
         ampGain.connect(ctx.destination);
-        lfo.start(t0);
-        lfo.stop(ctx.currentTime + duration);
         src.start(t0);
-        src.stop(ctx.currentTime + duration);
-        src.onended = () => { src.disconnect(); filt.disconnect(); ampGain.disconnect(); lfo.disconnect(); lfoGain.disconnect(); };
+        src.stop(t0 + duration);
+        src.onended = () => { src.disconnect(); filt.disconnect(); ampGain.disconnect(); };
       });
-      // Staggered rising "woo!" sweeps simulating individual voices
-      [
-        [280, 480, 0.10], [350, 580, 0.28], [320, 540, 0.50], [400, 660, 0.72],
-      ].forEach(([f0, f1, offset]) => {
-        const osc = ctx.createOscillator();
+      // Stochastic clap impulses: sparse at start, dense at peak, thinning at end
+      const claps = [];
+      let ct = 0.05;
+      while (ct < duration) {
+        claps.push(ct);
+        ct += 0.04 + (1 - clapProgress(ct)) * 0.14 + Math.random() * 0.06;
+      }
+      claps.forEach(offset => {
+        const clapDur = 0.02 + Math.random() * 0.025;
+        const bufSize = Math.ceil(ctx.sampleRate * clapDur);
+        const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'bandpass';
+        filt.frequency.value = 1000 + Math.random() * 2000;
+        filt.Q.value = 0.7 + Math.random() * 0.6;
+        const peak = (0.06 + Math.random() * 0.08) * Math.max(clapProgress(offset), 0.1);
         const g = ctx.createGain();
-        osc.connect(g);
+        g.gain.setValueAtTime(peak, t0 + offset);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + offset + clapDur);
+        src.connect(filt);
+        filt.connect(g);
         g.connect(ctx.destination);
-        osc.type = 'sine';
-        const t = ctx.currentTime + offset;
-        osc.frequency.setValueAtTime(f0, t);
-        osc.frequency.exponentialRampToValueAtTime(f1, t + 0.45);
-        g.gain.setValueAtTime(0.06, t);
-        g.gain.linearRampToValueAtTime(0.11, t + 0.1);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
-        osc.start(t);
-        osc.stop(t + 0.55);
-        osc.onended = () => { osc.disconnect(); g.disconnect(); };
+        src.start(t0 + offset);
+        src.stop(t0 + offset + clapDur);
+        src.onended = () => { src.disconnect(); filt.disconnect(); g.disconnect(); };
       });
     }
   };
@@ -280,7 +284,7 @@ function triggerConfetti(superMode = false) {
 
   if (superMode) {
     triggerFireworks();
-    SoundEffects.cheer();
+    SoundEffects.applause();
   }
 }
 
