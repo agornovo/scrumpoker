@@ -32,12 +32,6 @@ const autoRevealToggle = document.getElementById('auto-reveal-toggle');
 const autoRevealCheckbox = document.getElementById('auto-reveal-checkbox');
 const specialEffectsCheckbox = document.getElementById('special-effects');
 const muteSoundBtn = document.getElementById('mute-sound-btn');
-const timerSection = document.getElementById('timer-section');
-const timerControls = document.getElementById('timer-controls');
-const timerDurationSelect = document.getElementById('timer-duration');
-const startTimerBtn = document.getElementById('start-timer-btn');
-const stopTimerBtn = document.getElementById('stop-timer-btn');
-const timerDisplay = document.getElementById('timer-display');
 const roundHistorySection = document.getElementById('round-history');
 const roundHistoryList = document.getElementById('round-history-list');
 
@@ -335,8 +329,6 @@ let currentCardSet = 'standard';
 let wasRevealed = false;
 let specialEffectsEnabled = false;
 let isCreator = false;
-let currentTimerEndsAt = null;
-let timerIntervalId = null;
 let roundHistory = [];
 let roundNumber = 0;
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
@@ -606,13 +598,6 @@ leaveRoomBtn.addEventListener('click', () => {
   autoRevealToggle.classList.add('hidden');
   autoRevealCheckbox.checked = false;
 
-  // Clear timer
-  clearTimerDisplay();
-  timerSection.classList.add('hidden');
-  timerControls.classList.add('hidden');
-  startTimerBtn.classList.remove('hidden');
-  stopTimerBtn.classList.add('hidden');
-
   // Clear round history
   roundHistory = [];
   roundNumber = 0;
@@ -642,59 +627,6 @@ autoRevealCheckbox.addEventListener('change', () => {
     autoReveal: autoRevealCheckbox.checked
   });
 });
-
-// Timer controls
-startTimerBtn.addEventListener('click', () => {
-  socket.emit('start-timer', {
-    roomId: currentRoomId,
-    durationSecs: parseInt(timerDurationSelect.value) || 60
-  });
-});
-
-stopTimerBtn.addEventListener('click', () => {
-  socket.emit('stop-timer', { roomId: currentRoomId });
-});
-
-// Clear the countdown interval and reset timer display
-function clearTimerDisplay() {
-  if (timerIntervalId) {
-    clearInterval(timerIntervalId);
-    timerIntervalId = null;
-  }
-  currentTimerEndsAt = null;
-  timerDisplay.textContent = '';
-  timerDisplay.classList.add('hidden');
-  timerDisplay.classList.remove('timer-urgent');
-}
-
-// Update the countdown display (called every second while timer is running)
-function updateTimerCountdown() {
-  if (!currentTimerEndsAt) {
-    clearTimerDisplay();
-    return;
-  }
-  const remaining = Math.ceil((currentTimerEndsAt - Date.now()) / 1000);
-  if (remaining <= 0) {
-    clearTimerDisplay();
-    // Host auto-reveals when timer expires
-    if (!isRevealed && currentRoomId && isCreator) {
-      socket.emit('reveal', { roomId: currentRoomId });
-      socket.emit('stop-timer', { roomId: currentRoomId });
-    }
-    return;
-  }
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  timerDisplay.textContent = mins > 0
-    ? `⏱ ${mins}:${secs.toString().padStart(2, '0')}`
-    : `⏱ ${secs}s`;
-  timerDisplay.classList.remove('hidden');
-  if (remaining <= 10) {
-    timerDisplay.classList.add('timer-urgent');
-  } else {
-    timerDisplay.classList.remove('timer-urgent');
-  }
-}
 
 // Render the round history list (most recent round first)
 function renderRoundHistory() {
@@ -983,36 +915,6 @@ socket.on('room-update', (data) => {
     }
   }
 
-  // Update timer UI
-  const newEndsAt = (data.timer && data.timer.endsAt) || null;
-  if (newEndsAt !== currentTimerEndsAt) {
-    currentTimerEndsAt = newEndsAt;
-    if (timerIntervalId) {
-      clearInterval(timerIntervalId);
-      timerIntervalId = null;
-    }
-    if (currentTimerEndsAt) {
-      updateTimerCountdown();
-      timerIntervalId = setInterval(updateTimerCountdown, 1000);
-      startTimerBtn.classList.add('hidden');
-      stopTimerBtn.classList.remove('hidden');
-    } else {
-      clearTimerDisplay();
-      startTimerBtn.classList.remove('hidden');
-      stopTimerBtn.classList.add('hidden');
-    }
-  }
-  // Show timer section to host always; show to non-host only when timer is active
-  if (isCreator) {
-    timerSection.classList.remove('hidden');
-    timerControls.classList.remove('hidden');
-  } else if (currentTimerEndsAt) {
-    timerSection.classList.remove('hidden');
-    timerControls.classList.add('hidden');
-  } else {
-    timerSection.classList.add('hidden');
-  }
-
   // Save round history when cards are revealed for the first time in a round
   if (justRevealed && data.stats) {
     roundNumber++;
@@ -1034,7 +936,6 @@ socket.on('removed-from-room', () => {
   currentRoomId = null;
   currentUserName = null;
   selectedVote = null;
-  clearTimerDisplay();
   roundHistory = [];
   roundNumber = 0;
   roundHistorySection.classList.add('hidden');

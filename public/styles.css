@@ -1003,68 +1003,6 @@ footer .footer-link:hover {
   text-decoration: underline;
 }
 
-/* Timer Section */
-.timer-section {
-  background: var(--card-bg);
-  border-radius: 8px;
-  padding: 14px 24px;
-  margin-bottom: 24px;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  min-height: 54px;
-}
-
-.timer-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.timer-controls select {
-  padding: 8px 12px;
-  border: 2px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background: var(--lighter-bg);
-  color: var(--dark-text);
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-}
-
-.timer-controls select:hover {
-  border-color: var(--light-text);
-}
-
-.timer-controls select:focus {
-  outline: none;
-  border-color: var(--border-focus);
-}
-
-.timer-display {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--primary-color);
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
-  letter-spacing: 1px;
-  flex: 1;
-  text-align: center;
-}
-
-.timer-display.timer-urgent {
-  color: var(--danger-color);
-  animation: timer-pulse 0.7s ease-in-out infinite;
-}
-
-@keyframes timer-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
 /* Round History */
 .round-history {
   background: var(--card-bg);
@@ -1144,20 +1082,8 @@ footer .footer-link:hover {
   font-weight: 700;
 }
 
-/* Responsive: timer and history */
+/* Responsive: round history */
 @media (max-width: 768px) {
-  .timer-section {
-    padding: 12px 16px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .timer-display {
-    font-size: 1.4rem;
-    text-align: left;
-  }
-
   .round-history-item {
     grid-template-columns: 64px 1fr;
     grid-template-rows: auto auto;
@@ -1169,7 +1095,8 @@ footer .footer-link:hover {
   }
 }
 
-
+/* Responsive Design */
+@media (max-width: 768px) {
   .header-top {
     flex-direction: column;
     gap: 10px;
