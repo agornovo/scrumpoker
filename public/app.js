@@ -883,17 +883,20 @@ socket.on('room-update', (data) => {
 
       // Confetti when all voters agree
       const voters = data.users.filter(u => !u.isObserver && u.vote !== null);
-      if (voters.length >= MIN_VOTERS_FOR_CONSENSUS && data.stats.min === data.stats.max) {
+      const isConsensus = voters.length >= MIN_VOTERS_FOR_CONSENSUS && data.stats.min === data.stats.max;
+      if (isConsensus) {
         triggerConfetti(specialEffectsEnabled);
       }
 
-      // Special effects: bounce all participant cards after the flip animations settle
-      if (specialEffectsEnabled) {
+      // Animate participant cards after the flip animations settle.
+      // On consensus: cards dance in celebration; otherwise: tada-bounce (special effects only).
+      const cardAnimClass = isConsensus ? 'card-dance' : (specialEffectsEnabled ? 'tada-bounce' : null);
+      if (cardAnimClass) {
         participantsList.querySelectorAll('.participant-card').forEach((card, idx) => {
           const delay = Math.min(idx * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS) + TADA_BOUNCE_SETTLE_DELAY_MS;
           setTimeout(() => {
-            card.classList.add('tada-bounce');
-            card.addEventListener('animationend', () => card.classList.remove('tada-bounce'), { once: true });
+            card.classList.add(cardAnimClass);
+            card.addEventListener('animationend', () => card.classList.remove(cardAnimClass), { once: true });
           }, delay);
         });
       }
