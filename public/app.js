@@ -419,7 +419,19 @@ muteSoundBtn.addEventListener('click', () => {
 
 // Generate a random room ID
 function generateRoomId() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // Use cryptographically secure randomness for room IDs
+  const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const idLength = 6;
+  const bytes = new Uint8Array(idLength);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+
+  let result = '';
+  for (let i = 0; i < idLength; i++) {
+    // Map byte (0-255) uniformly into 0-35 using modulo
+    const index = bytes[i] % alphabet.length;
+    result += alphabet.charAt(index);
+  }
+  return result;
 }
 
 // Join room
