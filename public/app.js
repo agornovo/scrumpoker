@@ -517,8 +517,6 @@ joinBtn.addEventListener('click', () => {
     // URL API not available
   }
 
-  saveSession();
-
   // Show voting screen
   welcomeScreen.classList.add('hidden');
   votingScreen.classList.remove('hidden');
@@ -530,6 +528,8 @@ joinBtn.addEventListener('click', () => {
   if (isObserver) {
     cardSelection.style.display = 'none';
   }
+
+  saveSession();
 });
 
 // Copy room ID to clipboard
