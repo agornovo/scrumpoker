@@ -120,7 +120,8 @@ io.on('connection', (socket) => {
         cardSet: cardSet || 'standard',
         storyTitle: '',
         autoReveal: false,
-        specialEffects: !!specialEffects
+        specialEffects: !!specialEffects,
+        timer: { endsAt: null }
       });
       log('Created room:', roomId);
     }
@@ -202,6 +203,7 @@ io.on('connection', (socket) => {
     }
 
     room.revealed = false;
+    room.timer = { endsAt: null };
     room.users.forEach(user => {
       user.vote = null;
     });
@@ -229,6 +231,31 @@ io.on('connection', (socket) => {
     if (socket.id !== room.creatorId) return;
 
     room.autoReveal = !!autoReveal;
+    emitRoomUpdate(roomId);
+  });
+
+  // Start countdown timer (only room creator can do this)
+  socket.on('start-timer', ({ roomId, durationSecs }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    if (socket.id !== room.creatorId) return;
+
+    const duration = Math.min(Math.max(parseInt(durationSecs) || 60, 5), 300);
+    room.timer = { endsAt: Date.now() + duration * 1000 };
+    log(`Timer started in room ${roomId} for ${duration}s`);
+    emitRoomUpdate(roomId);
+  });
+
+  // Stop countdown timer (only room creator can do this)
+  socket.on('stop-timer', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    if (socket.id !== room.creatorId) return;
+
+    room.timer = { endsAt: null };
+    log(`Timer stopped in room ${roomId}`);
     emitRoomUpdate(roomId);
   });
 
@@ -332,7 +359,8 @@ io.on('connection', (socket) => {
       cardSet: room.cardSet,
       storyTitle: room.storyTitle,
       autoReveal: room.autoReveal,
-      specialEffects: room.specialEffects
+      specialEffects: room.specialEffects,
+      timer: room.timer
     });
   }
 });

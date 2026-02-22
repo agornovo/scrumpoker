@@ -39,7 +39,8 @@ function createTestServer() {
         cardSet: cardSet || 'standard',
         storyTitle: '',
         autoReveal: false,
-        specialEffects: !!specialEffects
+        specialEffects: !!specialEffects,
+        timer: { endsAt: null }
       });
     }
       
@@ -105,6 +106,7 @@ function createTestServer() {
       }
       
       room.revealed = false;
+      room.timer = { endsAt: null };
       room.users.forEach(user => {
         user.vote = null;
       });
@@ -124,6 +126,23 @@ function createTestServer() {
       if (!room) return;
       if (socket.id !== room.creatorId) return;
       room.autoReveal = !!autoReveal;
+      emitRoomUpdate(roomId);
+    });
+
+    socket.on('start-timer', ({ roomId, durationSecs }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+      if (socket.id !== room.creatorId) return;
+      const duration = Math.min(Math.max(parseInt(durationSecs) || 60, 5), 300);
+      room.timer = { endsAt: Date.now() + duration * 1000 };
+      emitRoomUpdate(roomId);
+    });
+
+    socket.on('stop-timer', ({ roomId }) => {
+      const room = rooms.get(roomId);
+      if (!room) return;
+      if (socket.id !== room.creatorId) return;
+      room.timer = { endsAt: null };
       emitRoomUpdate(roomId);
     });
 
@@ -207,7 +226,8 @@ function createTestServer() {
         cardSet: room.cardSet,
         storyTitle: room.storyTitle,
         autoReveal: room.autoReveal,
-        specialEffects: room.specialEffects
+        specialEffects: room.specialEffects,
+        timer: room.timer
       });
     }
   });
@@ -1753,6 +1773,182 @@ describe('Auto-Reveal', () => {
     });
 
     host.emit('join-room', { roomId: 'AR_OBSERVERS', userName: 'HostObserver', isObserver: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Voting Timer tests
+// ---------------------------------------------------------------------------
+describe('Voting Timer', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('should include timer with null endsAt by default', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', (data) => {
+      expect(data.timer).toBeDefined();
+      expect(data.timer.endsAt).toBeNull();
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'TIMER_DEFAULT', userName: 'Host', isObserver: false });
+  });
+
+  test('host should be able to start a timer', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('start-timer', { roomId: 'TIMER_START', durationSecs: 60 });
+      } else if (updateCount === 2) {
+        expect(data.timer.endsAt).not.toBeNull();
+        expect(data.timer.endsAt).toBeGreaterThan(Date.now());
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'TIMER_START', userName: 'Host', isObserver: false });
+  });
+
+  test('host should be able to stop a timer', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('start-timer', { roomId: 'TIMER_STOP', durationSecs: 60 });
+      } else if (updateCount === 2) {
+        expect(data.timer.endsAt).not.toBeNull();
+        client.emit('stop-timer', { roomId: 'TIMER_STOP' });
+      } else if (updateCount === 3) {
+        expect(data.timer.endsAt).toBeNull();
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'TIMER_STOP', userName: 'Host', isObserver: false });
+  });
+
+  test('non-host should not be able to start a timer', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    host.on('room-update', (data) => {
+      joinCount++;
+      if (joinCount === 2) {
+        participant.emit('start-timer', { roomId: 'TIMER_AUTH', durationSecs: 60 });
+
+        setTimeout(() => {
+          const room = rooms.get('TIMER_AUTH');
+          expect(room.timer.endsAt).toBeNull();
+          host.disconnect();
+          participant.disconnect();
+          done();
+        }, 200);
+      }
+    });
+
+    host.emit('join-room', { roomId: 'TIMER_AUTH', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'TIMER_AUTH', userName: 'Participant', isObserver: false });
+    }, 50);
+  });
+
+  test('timer endsAt should be within expected range', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+    const before = Date.now();
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('start-timer', { roomId: 'TIMER_RANGE', durationSecs: 30 });
+      } else if (updateCount === 2) {
+        const expectedMin = before + 29 * 1000;
+        const expectedMax = Date.now() + 31 * 1000;
+        expect(data.timer.endsAt).toBeGreaterThanOrEqual(expectedMin);
+        expect(data.timer.endsAt).toBeLessThanOrEqual(expectedMax);
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'TIMER_RANGE', userName: 'Host', isObserver: false });
+  });
+
+  test('timer should be cleared on reset', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        client.emit('vote', { roomId: 'TIMER_RESET', vote: 5 });
+      } else if (updateCount === 2) {
+        client.emit('start-timer', { roomId: 'TIMER_RESET', durationSecs: 60 });
+      } else if (updateCount === 3) {
+        expect(data.timer.endsAt).not.toBeNull();
+        client.emit('reveal', { roomId: 'TIMER_RESET' });
+      } else if (updateCount === 4) {
+        client.emit('reset', { roomId: 'TIMER_RESET' });
+      } else if (updateCount === 5) {
+        expect(data.timer.endsAt).toBeNull();
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'TIMER_RESET', userName: 'Host', isObserver: false });
+  });
+
+  test('timer duration should be clamped between 5 and 300 seconds', (done) => {
+    const client = Client(serverUrl);
+    let updateCount = 0;
+    const beforeShort = Date.now();
+
+    client.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        // Try to set 1-second timer (should be clamped to 5s)
+        client.emit('start-timer', { roomId: 'TIMER_CLAMP', durationSecs: 1 });
+      } else if (updateCount === 2) {
+        // Should be at least 5 seconds from now
+        expect(data.timer.endsAt).toBeGreaterThanOrEqual(beforeShort + 4 * 1000);
+        client.disconnect();
+        done();
+      }
+    });
+
+    client.emit('join-room', { roomId: 'TIMER_CLAMP', userName: 'Host', isObserver: false });
   });
 });
 

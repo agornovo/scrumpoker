@@ -12,6 +12,7 @@ const cardSetSelect = document.getElementById('card-set');
 const joinBtn = document.getElementById('join-btn');
 const currentRoomIdDisplay = document.getElementById('current-room-id');
 const copyRoomIdBtn = document.getElementById('copy-room-id');
+const copyShareLinkBtn = document.getElementById('copy-share-link');
 const leaveRoomBtn = document.getElementById('leave-room');
 const participantsList = document.getElementById('participants-list');
 const participantCount = document.getElementById('participant-count');
@@ -31,6 +32,14 @@ const autoRevealToggle = document.getElementById('auto-reveal-toggle');
 const autoRevealCheckbox = document.getElementById('auto-reveal-checkbox');
 const specialEffectsCheckbox = document.getElementById('special-effects');
 const muteSoundBtn = document.getElementById('mute-sound-btn');
+const timerSection = document.getElementById('timer-section');
+const timerControls = document.getElementById('timer-controls');
+const timerDurationSelect = document.getElementById('timer-duration');
+const startTimerBtn = document.getElementById('start-timer-btn');
+const stopTimerBtn = document.getElementById('stop-timer-btn');
+const timerDisplay = document.getElementById('timer-display');
+const roundHistorySection = document.getElementById('round-history');
+const roundHistoryList = document.getElementById('round-history-list');
 
 // Card deck definitions
 const CARD_DECKS = {
@@ -325,6 +334,11 @@ let selectedVote = null;
 let currentCardSet = 'standard';
 let wasRevealed = false;
 let specialEffectsEnabled = false;
+let isCreator = false;
+let currentTimerEndsAt = null;
+let timerIntervalId = null;
+let roundHistory = [];
+let roundNumber = 0;
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
 const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
 const SOUND_MUTED_STORAGE_KEY = 'scrumpoker-sound-muted';
@@ -417,6 +431,17 @@ muteSoundBtn.addEventListener('click', () => {
   }
 });
 
+// Pre-fill room ID from URL query param (?room=XXXXX) for link sharing
+try {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlRoomId = urlParams.get('room');
+  if (urlRoomId) {
+    roomIdInput.value = urlRoomId.toUpperCase();
+  }
+} catch (e) {
+  // URL parsing not supported or not applicable
+}
+
 // Generate a random room ID
 function generateRoomId() {
   // Use cryptographically secure randomness for room IDs
@@ -453,6 +478,15 @@ joinBtn.addEventListener('click', () => {
     cardSet: cardSetSelect.value,
     specialEffects: specialEffectsCheckbox.checked
   });
+
+  // Update URL with room ID for easy link sharing
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', currentRoomId);
+    window.history.replaceState(null, '', url.toString());
+  } catch (e) {
+    // URL API not available
+  }
 
   // Show voting screen
   welcomeScreen.classList.add('hidden');
@@ -506,11 +540,57 @@ copyRoomIdBtn.addEventListener('click', async () => {
   }
 });
 
+// Copy shareable room link to clipboard
+copyShareLinkBtn.addEventListener('click', async () => {
+  try {
+    let shareUrl;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', currentRoomId);
+      shareUrl = url.toString();
+    } catch (e) {
+      shareUrl = window.location.origin + window.location.pathname + '?room=' + currentRoomId;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(shareUrl);
+    } else {
+      const textArea = document.createElement('textarea');
+      textArea.value = shareUrl;
+      textArea.style.position = 'absolute';
+      textArea.style.left = '-9999px';
+      textArea.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    }
+    copyShareLinkBtn.textContent = '✓';
+    setTimeout(() => { copyShareLinkBtn.textContent = '🔗'; }, 2000);
+  } catch (err) {
+    console.error('Failed to copy link:', err);
+    copyShareLinkBtn.textContent = '✗';
+    setTimeout(() => { copyShareLinkBtn.textContent = '🔗'; }, 2000);
+  }
+});
+
 // Leave room
 leaveRoomBtn.addEventListener('click', () => {
   socket.disconnect();
   socket.connect();
   
+  // Remove room ID from URL
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url.toString());
+  } catch (e) {
+    // URL API not available
+  }
+
   welcomeScreen.classList.remove('hidden');
   votingScreen.classList.add('hidden');
   
@@ -525,6 +605,19 @@ leaveRoomBtn.addEventListener('click', () => {
   storyTitleDisplay.classList.add('hidden');
   autoRevealToggle.classList.add('hidden');
   autoRevealCheckbox.checked = false;
+
+  // Clear timer
+  clearTimerDisplay();
+  timerSection.classList.add('hidden');
+  timerControls.classList.add('hidden');
+  startTimerBtn.classList.remove('hidden');
+  stopTimerBtn.classList.add('hidden');
+
+  // Clear round history
+  roundHistory = [];
+  roundNumber = 0;
+  roundHistorySection.classList.add('hidden');
+  roundHistoryList.innerHTML = '';
   
   // Clear selected cards
   clearCardSelection();
@@ -549,6 +642,94 @@ autoRevealCheckbox.addEventListener('change', () => {
     autoReveal: autoRevealCheckbox.checked
   });
 });
+
+// Timer controls
+startTimerBtn.addEventListener('click', () => {
+  socket.emit('start-timer', {
+    roomId: currentRoomId,
+    durationSecs: parseInt(timerDurationSelect.value) || 60
+  });
+});
+
+stopTimerBtn.addEventListener('click', () => {
+  socket.emit('stop-timer', { roomId: currentRoomId });
+});
+
+// Clear the countdown interval and reset timer display
+function clearTimerDisplay() {
+  if (timerIntervalId) {
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+  currentTimerEndsAt = null;
+  timerDisplay.textContent = '';
+  timerDisplay.classList.add('hidden');
+  timerDisplay.classList.remove('timer-urgent');
+}
+
+// Update the countdown display (called every second while timer is running)
+function updateTimerCountdown() {
+  if (!currentTimerEndsAt) {
+    clearTimerDisplay();
+    return;
+  }
+  const remaining = Math.ceil((currentTimerEndsAt - Date.now()) / 1000);
+  if (remaining <= 0) {
+    clearTimerDisplay();
+    // Host auto-reveals when timer expires
+    if (!isRevealed && currentRoomId && isCreator) {
+      socket.emit('reveal', { roomId: currentRoomId });
+      socket.emit('stop-timer', { roomId: currentRoomId });
+    }
+    return;
+  }
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+  timerDisplay.textContent = mins > 0
+    ? `⏱ ${mins}:${secs.toString().padStart(2, '0')}`
+    : `⏱ ${secs}s`;
+  timerDisplay.classList.remove('hidden');
+  if (remaining <= 10) {
+    timerDisplay.classList.add('timer-urgent');
+  } else {
+    timerDisplay.classList.remove('timer-urgent');
+  }
+}
+
+// Render the round history list (most recent round first)
+function renderRoundHistory() {
+  if (roundHistory.length === 0) {
+    roundHistorySection.classList.add('hidden');
+    return;
+  }
+  roundHistorySection.classList.remove('hidden');
+  roundHistoryList.innerHTML = '';
+  [...roundHistory].reverse().forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'round-history-item';
+
+    const numberEl = document.createElement('div');
+    numberEl.className = 'round-number';
+    numberEl.textContent = `Round ${entry.round}`;
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'round-title';
+    titleEl.textContent = entry.title || '(no title)';
+    titleEl.title = entry.title || '';
+
+    const statsEl = document.createElement('div');
+    statsEl.className = 'round-stats';
+    statsEl.innerHTML =
+      `<span><strong>${entry.stats.average}</strong>avg</span>` +
+      `<span><strong>${entry.stats.min}</strong>min</span>` +
+      `<span><strong>${entry.stats.max}</strong>max</span>`;
+
+    item.appendChild(numberEl);
+    item.appendChild(titleEl);
+    item.appendChild(statsEl);
+    roundHistoryList.appendChild(item);
+  });
+}
 
 // Card selection (event delegation on the container)
 cardsContainer.addEventListener('click', (e) => {
@@ -755,7 +936,7 @@ socket.on('room-update', (data) => {
 
   // Update button states
   const hasVotes = data.users.some(u => !u.isObserver && u.vote !== null);
-  const isCreator = data.creatorId === socket.id;
+  isCreator = data.creatorId === socket.id;
 
   // Disable card selection when votes are revealed
   cardsContainer.querySelectorAll('.card-button').forEach(btn => {
@@ -801,6 +982,47 @@ socket.on('room-update', (data) => {
       storyTitleDisplay.classList.add('hidden');
     }
   }
+
+  // Update timer UI
+  const newEndsAt = (data.timer && data.timer.endsAt) || null;
+  if (newEndsAt !== currentTimerEndsAt) {
+    currentTimerEndsAt = newEndsAt;
+    if (timerIntervalId) {
+      clearInterval(timerIntervalId);
+      timerIntervalId = null;
+    }
+    if (currentTimerEndsAt) {
+      updateTimerCountdown();
+      timerIntervalId = setInterval(updateTimerCountdown, 1000);
+      startTimerBtn.classList.add('hidden');
+      stopTimerBtn.classList.remove('hidden');
+    } else {
+      clearTimerDisplay();
+      startTimerBtn.classList.remove('hidden');
+      stopTimerBtn.classList.add('hidden');
+    }
+  }
+  // Show timer section to host always; show to non-host only when timer is active
+  if (isCreator) {
+    timerSection.classList.remove('hidden');
+    timerControls.classList.remove('hidden');
+  } else if (currentTimerEndsAt) {
+    timerSection.classList.remove('hidden');
+    timerControls.classList.add('hidden');
+  } else {
+    timerSection.classList.add('hidden');
+  }
+
+  // Save round history when cards are revealed for the first time in a round
+  if (justRevealed && data.stats) {
+    roundNumber++;
+    roundHistory.push({
+      round: roundNumber,
+      title: data.storyTitle || '',
+      stats: Object.assign({}, data.stats)
+    });
+    renderRoundHistory();
+  }
 });
 
 // Handle being removed from a room
@@ -812,6 +1034,19 @@ socket.on('removed-from-room', () => {
   currentRoomId = null;
   currentUserName = null;
   selectedVote = null;
+  clearTimerDisplay();
+  roundHistory = [];
+  roundNumber = 0;
+  roundHistorySection.classList.add('hidden');
+  roundHistoryList.innerHTML = '';
+  // Remove room from URL
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url.toString());
+  } catch (e) {
+    // URL API not available
+  }
 });
 
 // Connection status
