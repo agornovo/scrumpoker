@@ -95,6 +95,13 @@ app.get('/api/commit', commitLimiter, (req, res) => {
 // Store rooms and their state
 const rooms = new Map();
 
+// Grace period (ms) before removing a disconnected user, to allow page-refresh reconnections
+const RECONNECT_GRACE_PERIOD_MS = 8000;
+
+// Tracks users in their grace-period window after disconnect (keyed by clientId)
+// Pending removals: clientId -> { timer, roomId, oldSocketId, userData }
+const pendingRemovals = new Map();
+
 // Room structure:
 // {
 //   id: string,
@@ -108,7 +115,55 @@ io.on('connection', (socket) => {
   log('New client connected:', socket.id);
 
   // Join a room
-  socket.on('join-room', ({ roomId, userName, isObserver, cardSet, specialEffects }) => {
+  socket.on('join-room', ({ roomId, userName, isObserver, cardSet, specialEffects, clientId }) => {
+    // Store clientId on the socket for use during disconnect
+    if (clientId) socket.clientId = clientId;
+
+    // Check if this is a reconnecting user within the grace period
+    if (clientId && pendingRemovals.has(clientId)) {
+      const pending = pendingRemovals.get(clientId);
+      if (pending.roomId === roomId) {
+        clearTimeout(pending.timer);
+        pendingRemovals.delete(clientId);
+
+        const room = rooms.get(roomId);
+        if (room) {
+          // Replace old socket entry with new one, preserving vote and observer status
+          room.users.delete(pending.oldSocketId);
+          room.users.set(socket.id, {
+            name: pending.userData.name,
+            vote: pending.userData.vote,
+            isObserver: pending.userData.isObserver
+          });
+
+          // Update creatorId if the reconnecting user was the room creator
+          if (room.creatorId === pending.oldSocketId) {
+            room.creatorId = socket.id;
+          }
+
+          socket.join(roomId);
+          socket.roomId = roomId;
+          log(`User ${pending.userData.name} reconnected to room ${roomId}`);
+          emitRoomUpdate(roomId);
+          return;
+        }
+      } else {
+        // Reconnecting to a different room – finalise the old pending removal now
+        clearTimeout(pending.timer);
+        const oldRoom = rooms.get(pending.roomId);
+        if (oldRoom) {
+          oldRoom.users.delete(pending.oldSocketId);
+          if (oldRoom.users.size === 0) {
+            rooms.delete(pending.roomId);
+            log('Deleted empty room:', pending.roomId);
+          } else {
+            emitRoomUpdate(pending.roomId);
+          }
+        }
+        pendingRemovals.delete(clientId);
+      }
+    }
+
     // Create room if it doesn't exist
     if (!rooms.has(roomId)) {
       rooms.set(roomId, {
@@ -255,6 +310,15 @@ io.on('connection', (socket) => {
       room.users.delete(participantId);
       log(`User ${removedUser.name} removed from room ${roomId} by creator`);
 
+      // Cancel any pending reconnect grace period for the removed user
+      for (const [cid, pending] of pendingRemovals.entries()) {
+        if (pending.oldSocketId === participantId) {
+          clearTimeout(pending.timer);
+          pendingRemovals.delete(cid);
+          break;
+        }
+      }
+
       // Disconnect the removed user's socket
       const targetSocket = io.sockets.sockets.get(participantId);
       if (targetSocket) {
@@ -274,15 +338,36 @@ io.on('connection', (socket) => {
     const roomId = socket.roomId;
     if (roomId) {
       const room = rooms.get(roomId);
-      if (room) {
-        room.users.delete(socket.id);
-        
-        // Clean up empty rooms
-        if (room.users.size === 0) {
-          rooms.delete(roomId);
-          log('Deleted empty room:', roomId);
+      if (room && room.users.has(socket.id)) {
+        const clientId = socket.clientId;
+        if (clientId) {
+          // Start a grace period to allow reconnection (e.g. page refresh)
+          const userData = { ...room.users.get(socket.id) };
+          const oldSocketId = socket.id;
+          const timer = setTimeout(() => {
+            pendingRemovals.delete(clientId);
+            const r = rooms.get(roomId);
+            if (r) {
+              r.users.delete(oldSocketId);
+              if (r.users.size === 0) {
+                rooms.delete(roomId);
+                log('Deleted empty room:', roomId);
+              } else {
+                emitRoomUpdate(roomId);
+              }
+            }
+          }, RECONNECT_GRACE_PERIOD_MS);
+          pendingRemovals.set(clientId, { timer, roomId, oldSocketId, userData });
+          log(`User ${userData.name} disconnected from room ${roomId}, grace period started`);
         } else {
-          emitRoomUpdate(roomId);
+          // No clientId – remove the user immediately (legacy / non-browser clients)
+          room.users.delete(socket.id);
+          if (room.users.size === 0) {
+            rooms.delete(roomId);
+            log('Deleted empty room:', roomId);
+          } else {
+            emitRoomUpdate(roomId);
+          }
         }
       }
     }

@@ -334,6 +334,42 @@ let roundNumber = 0;
 const THEME_STORAGE_KEY = 'scrumpoker-theme';
 const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
 const SOUND_MUTED_STORAGE_KEY = 'scrumpoker-sound-muted';
+const SESSION_STORAGE_KEY = 'scrumpoker-session';
+const CLIENT_ID_STORAGE_KEY = 'scrumpoker-client-id';
+
+// Per-tab client ID used by the server to restore sessions after a page refresh
+let clientId;
+try {
+  clientId = sessionStorage.getItem(CLIENT_ID_STORAGE_KEY);
+  if (!clientId) {
+    const bytes = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    clientId = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    sessionStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId);
+  }
+} catch (e) {
+  const bytes = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  clientId = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Persist the current room session so it can be restored after a page refresh
+function saveSession() {
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+      roomId: currentRoomId,
+      userName: currentUserName,
+      isObserver
+    }));
+  } catch (e) { /* ignore */ }
+}
+
+// Remove the saved session (called on intentional leave or when removed from room)
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch (e) { /* ignore */ }
+}
 
 // Initialize cards with the default deck
 renderCards(currentCardSet);
@@ -468,7 +504,8 @@ joinBtn.addEventListener('click', () => {
     userName: currentUserName,
     isObserver: isObserver,
     cardSet: cardSetSelect.value,
-    specialEffects: specialEffectsCheckbox.checked
+    specialEffects: specialEffectsCheckbox.checked,
+    clientId
   });
 
   // Update URL with room ID for easy link sharing
@@ -491,6 +528,8 @@ joinBtn.addEventListener('click', () => {
   if (isObserver) {
     cardSelection.style.display = 'none';
   }
+
+  saveSession();
 });
 
 // Copy room ID to clipboard
@@ -571,6 +610,7 @@ copyShareLinkBtn.addEventListener('click', async () => {
 
 // Leave room
 leaveRoomBtn.addEventListener('click', () => {
+  clearSession();
   socket.disconnect();
   socket.connect();
   
@@ -929,6 +969,7 @@ socket.on('room-update', (data) => {
 
 // Handle being removed from a room
 socket.on('removed-from-room', () => {
+  clearSession();
   alert('You have been removed from the room by the room creator.');
   // Return to welcome screen
   welcomeScreen.classList.remove('hidden');
@@ -953,6 +994,38 @@ socket.on('removed-from-room', () => {
 // Connection status
 socket.on('connect', () => {
   console.log('Connected to server');
+
+  // Auto-rejoin if a session was saved (handles page refresh)
+  if (!currentRoomId) {
+    try {
+      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (stored) {
+        const session = JSON.parse(stored);
+        if (session.roomId && session.userName) {
+          currentRoomId = session.roomId;
+          currentUserName = session.userName;
+          isObserver = session.isObserver || false;
+
+          socket.emit('join-room', {
+            roomId: currentRoomId,
+            userName: currentUserName,
+            isObserver,
+            cardSet: currentCardSet,
+            specialEffects: specialEffectsCheckbox.checked,
+            clientId
+          });
+
+          welcomeScreen.classList.add('hidden');
+          votingScreen.classList.remove('hidden');
+          currentRoomIdDisplay.textContent = currentRoomId;
+
+          if (isObserver) {
+            cardSelection.style.display = 'none';
+          }
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
 });
 
 socket.on('disconnect', () => {

@@ -9,12 +9,13 @@ const VERIFICATION_DELAY_MS = 1000; // Time to wait for all clients to receive f
 const BATCH_JOIN_DELAY_MS = 500; // Time between batches of users joining
 
 // Create a test server for each test
-function createTestServer() {
+function createTestServer({ reconnectGracePeriodMs = 0 } = {}) {
   const app = express();
   const server = http.createServer(app);
   const io = socketIo(server);
   
   const rooms = new Map();
+  const pendingRemovals = new Map(); // clientId -> { timer, roomId, oldSocketId, userData }
   
   // Health check endpoints
   app.get('/health', (req, res) => {
@@ -28,7 +29,49 @@ function createTestServer() {
   // Socket.IO logic
   io.on('connection', (socket) => {
   // Join a room
-  socket.on('join-room', ({ roomId, userName, isObserver, cardSet, specialEffects }) => {
+  socket.on('join-room', ({ roomId, userName, isObserver, cardSet, specialEffects, clientId }) => {
+    if (clientId) socket.clientId = clientId;
+
+    // Check if this is a reconnecting user within the grace period
+    if (clientId && pendingRemovals.has(clientId)) {
+      const pending = pendingRemovals.get(clientId);
+      if (pending.roomId === roomId) {
+        clearTimeout(pending.timer);
+        pendingRemovals.delete(clientId);
+
+        const room = rooms.get(roomId);
+        if (room) {
+          room.users.delete(pending.oldSocketId);
+          room.users.set(socket.id, {
+            name: pending.userData.name,
+            vote: pending.userData.vote,
+            isObserver: pending.userData.isObserver
+          });
+
+          if (room.creatorId === pending.oldSocketId) {
+            room.creatorId = socket.id;
+          }
+
+          socket.join(roomId);
+          socket.roomId = roomId;
+          emitRoomUpdate(roomId);
+          return;
+        }
+      } else {
+        clearTimeout(pending.timer);
+        const oldRoom = rooms.get(pending.roomId);
+        if (oldRoom) {
+          oldRoom.users.delete(pending.oldSocketId);
+          if (oldRoom.users.size === 0) {
+            rooms.delete(pending.roomId);
+          } else {
+            emitRoomUpdate(pending.roomId);
+          }
+        }
+        pendingRemovals.delete(clientId);
+      }
+    }
+
     if (!rooms.has(roomId)) {
       rooms.set(roomId, {
         id: roomId,
@@ -136,6 +179,15 @@ function createTestServer() {
       
       if (room.users.has(participantId)) {
         room.users.delete(participantId);
+
+        // Cancel any pending reconnect grace period for the removed user
+        for (const [cid, pending] of pendingRemovals.entries()) {
+          if (pending.oldSocketId === participantId) {
+            clearTimeout(pending.timer);
+            pendingRemovals.delete(cid);
+            break;
+          }
+        }
         
         const targetSocket = io.sockets.sockets.get(participantId);
         if (targetSocket) {
@@ -152,13 +204,31 @@ function createTestServer() {
       const roomId = socket.roomId;
       if (roomId) {
         const room = rooms.get(roomId);
-        if (room) {
-          room.users.delete(socket.id);
-          
-          if (room.users.size === 0) {
-            rooms.delete(roomId);
+        if (room && room.users.has(socket.id)) {
+          const clientId = socket.clientId;
+          if (clientId && reconnectGracePeriodMs > 0) {
+            const userData = { ...room.users.get(socket.id) };
+            const oldSocketId = socket.id;
+            const timer = setTimeout(() => {
+              pendingRemovals.delete(clientId);
+              const r = rooms.get(roomId);
+              if (r) {
+                r.users.delete(oldSocketId);
+                if (r.users.size === 0) {
+                  rooms.delete(roomId);
+                } else {
+                  emitRoomUpdate(roomId);
+                }
+              }
+            }, reconnectGracePeriodMs);
+            pendingRemovals.set(clientId, { timer, roomId, oldSocketId, userData });
           } else {
-            emitRoomUpdate(roomId);
+            room.users.delete(socket.id);
+            if (room.users.size === 0) {
+              rooms.delete(roomId);
+            } else {
+              emitRoomUpdate(roomId);
+            }
           }
         }
       }
@@ -212,7 +282,7 @@ function createTestServer() {
     }
   });
   
-  return { app, server, io, rooms };
+  return { app, server, io, rooms, pendingRemovals };
 }
 
 describe('Server Health Checks', () => {
@@ -808,6 +878,150 @@ describe('Room Cleanup', () => {
     
     client1.emit('join-room', { roomId: 'KEEPROOM', userName: 'User1', isObserver: false });
     client2.emit('join-room', { roomId: 'KEEPROOM', userName: 'User2', isObserver: false });
+  });
+});
+
+describe('Reconnection after page refresh', () => {
+  const GRACE_MS = 300; // short grace period to keep tests fast
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let pendingRemovals;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer({ reconnectGracePeriodMs: GRACE_MS });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    pendingRemovals = testServer.pendingRemovals;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('user stays in room during grace period after disconnect with clientId', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', () => {
+      expect(rooms.has('GRACE_STAY')).toBe(true);
+      client.disconnect();
+
+      // Immediately after disconnect the room should still exist (grace period active)
+      setTimeout(() => {
+        expect(rooms.has('GRACE_STAY')).toBe(true);
+        // Let the grace period expire and room gets cleaned up
+        setTimeout(() => {
+          expect(rooms.has('GRACE_STAY')).toBe(false);
+          done();
+        }, GRACE_MS + 100);
+      }, 50);
+    });
+
+    client.emit('join-room', { roomId: 'GRACE_STAY', userName: 'Alice', isObserver: false, clientId: 'cid-grace-stay' });
+  });
+
+  test('reconnecting user preserves vote and stays in room', (done) => {
+    const client1 = Client(serverUrl);
+    let voted = false;
+    let step = 0;
+
+    client1.on('room-update', (data) => {
+      step++;
+      if (step === 1) {
+        // Cast a vote
+        client1.emit('vote', { roomId: 'GRACE_VOTE', vote: 8 });
+      } else if (step === 2 && !voted) {
+        // Vote recorded; simulate page refresh: disconnect then reconnect with same clientId
+        voted = true;
+        client1.disconnect();
+
+        setTimeout(() => {
+          const client2 = Client(serverUrl);
+          client2.on('room-update', (data2) => {
+            // The reconnected user should have their vote preserved
+            const user = data2.users.find(u => u.name === 'Alice');
+            expect(user).toBeDefined();
+            // Before reveal, vote is shown as 'voted' (not null)
+            expect(user.vote).toBe('voted');
+            client2.disconnect();
+            done();
+          });
+          client2.emit('join-room', { roomId: 'GRACE_VOTE', userName: 'Alice', isObserver: false, clientId: 'cid-grace-vote' });
+        }, 50);
+      }
+    });
+
+    client1.emit('join-room', { roomId: 'GRACE_VOTE', userName: 'Alice', isObserver: false, clientId: 'cid-grace-vote' });
+  });
+
+  test('reconnecting host retains creator privileges', (done) => {
+    const client1 = Client(serverUrl);
+    let step = 0;
+
+    client1.on('room-update', (data) => {
+      step++;
+      if (step === 1) {
+        // Verify initial creator
+        expect(data.creatorId).toBe(client1.id);
+        client1.disconnect();
+
+        setTimeout(() => {
+          const client2 = Client(serverUrl);
+          client2.on('room-update', (data2) => {
+            // After reconnect, the new socket should be the creator
+            expect(data2.creatorId).toBe(client2.id);
+            client2.disconnect();
+            done();
+          });
+          client2.emit('join-room', { roomId: 'GRACE_HOST', userName: 'Host', isObserver: false, clientId: 'cid-grace-host' });
+        }, 50);
+      }
+    });
+
+    client1.emit('join-room', { roomId: 'GRACE_HOST', userName: 'Host', isObserver: false, clientId: 'cid-grace-host' });
+  });
+
+  test('room is deleted when grace period expires without reconnection', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', () => {
+      client.disconnect();
+
+      setTimeout(() => {
+        // Grace period expired – room should be gone
+        expect(rooms.has('GRACE_EXPIRE')).toBe(false);
+        done();
+      }, GRACE_MS + 100);
+    });
+
+    client.emit('join-room', { roomId: 'GRACE_EXPIRE', userName: 'Bob', isObserver: false, clientId: 'cid-grace-expire' });
+  });
+
+  test('user without clientId is removed immediately on disconnect', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', () => {
+      client.disconnect();
+
+      setTimeout(() => {
+        // No clientId means immediate removal
+        expect(rooms.has('GRACE_NOID')).toBe(false);
+        done();
+      }, 100);
+    });
+
+    // Intentionally omit clientId
+    client.emit('join-room', { roomId: 'GRACE_NOID', userName: 'Carol', isObserver: false });
   });
 });
 

@@ -15,6 +15,18 @@ If unit tests pass, also verify E2E tests with:
 npm run test:e2e
 ```
 
+## Merge Conflicts
+
+Before finalizing any PR, always check whether the base branch (`main`) has moved ahead of the PR branch.
+If it has, merge the base branch into the PR branch and resolve any conflicts automatically, keeping both sides of any non-overlapping changes.
+
+```bash
+git fetch origin main
+git merge FETCH_HEAD --no-edit
+```
+
+Resolve any conflict markers (keeping both feature changes where appropriate), then run tests to confirm nothing is broken, and commit the merge via `report_progress`.
+
 Only proceed to `code_review` and `codeql_checker` once all tests pass locally.
 
 ## Screenshots on Pull Requests
