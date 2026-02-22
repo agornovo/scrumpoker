@@ -98,6 +98,7 @@ const rooms = new Map();
 // Grace period (ms) before removing a disconnected user, to allow page-refresh reconnections
 const RECONNECT_GRACE_PERIOD_MS = 8000;
 
+// Tracks users in their grace-period window after disconnect (keyed by clientId)
 // Pending removals: clientId -> { timer, roomId, oldSocketId, userData }
 const pendingRemovals = new Map();
 
