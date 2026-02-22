@@ -1082,7 +1082,7 @@ footer .footer-link:hover {
   font-weight: 700;
 }
 
-/* Responsive: round history */
+/* Responsive Design */
 @media (max-width: 768px) {
   .round-history-item {
     grid-template-columns: 64px 1fr;
@@ -1093,10 +1093,7 @@ footer .footer-link:hover {
     grid-column: 1 / -1;
     gap: 10px;
   }
-}
 
-/* Responsive Design */
-@media (max-width: 768px) {
   .header-top {
     flex-direction: column;
     gap: 10px;
