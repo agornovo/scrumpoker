@@ -585,6 +585,26 @@ header h1 {
   border: 1px solid var(--border-color);
 }
 
+.become-host-banner {
+  background: var(--lighter-bg);
+  border: 2px solid var(--warning-color);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow);
+}
+
+.become-host-banner p {
+  margin: 0;
+  flex: 1;
+  color: var(--warning-color);
+  font-weight: 500;
+}
+
 .room-header {
   display: flex;
   justify-content: space-between;

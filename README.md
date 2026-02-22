@@ -35,6 +35,7 @@ A real-time networked scrum poker application for agile teams to estimate user s
 - 📘 **Estimation Help Section** - In-app guidance on usage, Fibonacci sizing, and story points
 - 👑 **Host Controls** - Room creator can reveal/reset rounds and remove participants
 - 🔄 **Reconnect Grace Period** - Page refreshes preserve your vote and room membership
+- 🏠 **Host Takeover** - If the host is absent for over a minute, remaining participants are offered the option to become the new host
 - 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
 - 🔒 **Room-based Sessions** - Private rooms with unique IDs for team privacy
 - 🔌 **WebSocket Communication** - Fast, real-time updates using Socket.IO

@@ -96,7 +96,10 @@ app.get('/api/commit', commitLimiter, (req, res) => {
 const rooms = new Map();
 
 // Grace period (ms) before removing a disconnected user, to allow page-refresh reconnections
-const RECONNECT_GRACE_PERIOD_MS = 8000;
+const RECONNECT_GRACE_PERIOD_MS = parseInt(process.env.RECONNECT_GRACE_PERIOD_MS) || 8000;
+
+// Time (ms) after the host has been removed from the room before participants are offered host takeover
+const HOST_TAKEOVER_TIMEOUT_MS = parseInt(process.env.HOST_TAKEOVER_TIMEOUT_MS) || 60000;
 
 // Tracks users in their grace-period window after disconnect (keyed by clientId)
 // Pending removals: clientId -> { timer, roomId, oldSocketId, userData }
@@ -139,6 +142,10 @@ io.on('connection', (socket) => {
           // Update creatorId if the reconnecting user was the room creator
           if (room.creatorId === pending.oldSocketId) {
             room.creatorId = socket.id;
+            if (room.hostAbsentTimer) {
+              clearTimeout(room.hostAbsentTimer);
+              room.hostAbsentTimer = null;
+            }
           }
 
           socket.join(roomId);
@@ -175,7 +182,8 @@ io.on('connection', (socket) => {
         cardSet: cardSet || 'standard',
         storyTitle: '',
         autoReveal: false,
-        specialEffects: !!specialEffects
+        specialEffects: !!specialEffects,
+        hostAbsentTimer: null
       });
       log('Created room:', roomId);
     }
@@ -287,6 +295,28 @@ io.on('connection', (socket) => {
     emitRoomUpdate(roomId);
   });
 
+  // Claim host role when current host is absent
+  socket.on('claim-host', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    // Claiming user must be in the room
+    if (!room.users.has(socket.id)) return;
+
+    // Only allowed when the current host is absent from the room
+    if (room.users.has(room.creatorId)) return;
+
+    // Cancel any pending host-absent timer
+    if (room.hostAbsentTimer) {
+      clearTimeout(room.hostAbsentTimer);
+      room.hostAbsentTimer = null;
+    }
+
+    room.creatorId = socket.id;
+    log(`User ${room.users.get(socket.id)?.name} claimed host in room ${roomId}`);
+    emitRoomUpdate(roomId);
+  });
+
   // Remove participant (only room creator can do this)
   socket.on('remove-participant', ({ roomId, participantId }) => {
     const room = rooms.get(roomId);
@@ -348,11 +378,19 @@ io.on('connection', (socket) => {
             pendingRemovals.delete(clientId);
             const r = rooms.get(roomId);
             if (r) {
+              const wasHost = r.creatorId === oldSocketId;
               r.users.delete(oldSocketId);
               if (r.users.size === 0) {
                 rooms.delete(roomId);
                 log('Deleted empty room:', roomId);
               } else {
+                if (wasHost) {
+                  r.hostAbsentTimer = setTimeout(() => {
+                    r.hostAbsentTimer = null;
+                    log(`Host absent in room ${roomId}, notifying participants`);
+                    io.to(roomId).emit('host-absent', { roomId });
+                  }, HOST_TAKEOVER_TIMEOUT_MS);
+                }
                 emitRoomUpdate(roomId);
               }
             }
@@ -361,11 +399,19 @@ io.on('connection', (socket) => {
           log(`User ${userData.name} disconnected from room ${roomId}, grace period started`);
         } else {
           // No clientId – remove the user immediately (legacy / non-browser clients)
+          const wasHost = room.creatorId === socket.id;
           room.users.delete(socket.id);
           if (room.users.size === 0) {
             rooms.delete(roomId);
             log('Deleted empty room:', roomId);
           } else {
+            if (wasHost) {
+              room.hostAbsentTimer = setTimeout(() => {
+                room.hostAbsentTimer = null;
+                log(`Host absent in room ${roomId}, notifying participants`);
+                io.to(roomId).emit('host-absent', { roomId });
+              }, HOST_TAKEOVER_TIMEOUT_MS);
+            }
             emitRoomUpdate(roomId);
           }
         }
