@@ -16,3 +16,9 @@ npm run test:e2e
 ```
 
 Only proceed to `code_review` and `codeql_checker` once all tests pass locally.
+
+## Screenshots on Pull Requests
+
+Always supply relevant screenshots on pull requests that include any UI or visual changes.
+Take screenshots of all affected states (e.g. welcome screen, voting room, revealed results) and embed them in the PR description or commit them to `docs/screenshots/`.
+This helps reviewers verify the visual impact without having to run the app.

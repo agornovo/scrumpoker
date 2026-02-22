@@ -102,7 +102,8 @@
           <div>
             <span class="label">Room ID:</span>
             <span id="current-room-id" class="room-id-display"></span>
-            <button id="copy-room-id" class="btn btn-icon" title="Copy to clipboard">📋</button>
+            <button id="copy-room-id" class="btn btn-icon" title="Copy room ID to clipboard">📋</button>
+            <button id="copy-share-link" class="btn btn-icon" title="Copy shareable link">🔗</button>
           </div>
           <button id="leave-room" class="btn btn-secondary">Leave Room</button>
         </div>
@@ -160,6 +161,12 @@
         <button id="reveal-btn" class="btn btn-primary">Reveal Cards</button>
         <button id="reset-btn" class="btn btn-secondary">New Round</button>
         <button id="mute-sound-btn" class="btn btn-secondary hidden" aria-label="Mute sound effects" title="Mute sound effects">🔊 Sounds on</button>
+      </div>
+
+      <!-- Round History -->
+      <div id="round-history" class="round-history hidden">
+        <h3>📜 Round History</h3>
+        <div id="round-history-list" class="round-history-list"></div>
       </div>
     </div>
   </div>
