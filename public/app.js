@@ -1064,32 +1064,3 @@ socket.on('connect_error', (error) => {
   alert('Failed to connect to server. Please try again.');
 });
 
-// Fetch and update the source code link with commit hash
-async function initializeCommitLink() {
-  try {
-    const response = await fetch('/api/commit');
-    if (!response.ok) {
-      throw new Error('Failed to fetch commit info');
-    }
-    const data = await response.json();
-    
-    const sourceLink = document.getElementById('source-link');
-    if (sourceLink && data.repository) {
-      if (data.hash) {
-        // Update link to point to specific commit when available
-        sourceLink.href = `${data.repository}/commit/${data.hash}`;
-        sourceLink.title = `View source code at commit ${data.shortHash}`;
-      } else {
-        // Fall back to repo link when commit hash is not available (e.g., in Docker)
-        sourceLink.href = data.repository;
-        sourceLink.title = 'View source code on GitHub';
-      }
-    }
-  } catch (error) {
-    console.warn('Could not fetch commit info:', error);
-    // Link will still work with default href from HTML
-  }
-}
-
-// Update source link on page load
-initializeCommitLink();
