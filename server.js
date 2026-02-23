@@ -2,8 +2,6 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const { execSync } = require('child_process');
-const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -42,54 +40,6 @@ app.get('/health', (req, res) => {
 
 app.get('/ready', (req, res) => {
   res.status(200).json({ status: 'ready' });
-});
-
-// Cache commit info to avoid repeated git command execution
-let cachedCommitInfo = null;
-
-// Rate limiter for commit info endpoint to prevent abuse of system command execution
-const commitLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60, // limit each IP to 60 requests per windowMs for this endpoint
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false,  // Disable the `X-RateLimit-*` headers
-});
-
-// Get commit info endpoint
-app.get('/api/commit', commitLimiter, (req, res) => {
-  try {
-    // Return cached result if available
-    if (cachedCommitInfo) {
-      return res.json(cachedCommitInfo);
-    }
-
-    // Try to get commit hash from environment variable (set during build)
-    let commitHash = process.env.GIT_COMMIT || process.env.COMMIT_SHA;
-    
-    // If not available, try to get it from git (only once, then cached)
-    // Note: This will fail in Docker containers where .git directory is not present
-    if (!commitHash) {
-      try {
-        commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 5000 }).trim();
-      } catch (error) {
-        // Git not available or not in a git repository (e.g., Docker container)
-        // Fall back to null - client will use repo link without specific commit
-        commitHash = null;
-      }
-    }
-    
-    // Cache the result
-    // When commitHash is null (Docker/production), link will point to repo root
-    cachedCommitInfo = {
-      hash: commitHash,
-      shortHash: commitHash ? commitHash.substring(0, 7) : null,
-      repository: 'https://github.com/agornovo/scrumpoker'
-    };
-
-    res.json(cachedCommitInfo);
-  } catch (error) {
-    res.status(500).json({ error: 'Unable to retrieve commit info' });
-  }
 });
 
 // Store rooms and their state
