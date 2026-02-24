@@ -888,16 +888,15 @@ socket.on('room-update', (data) => {
         SoundEffects.reveal();
       }
 
-      // Confetti when all voters agree
+      // Confetti when all voters agree (special effects only)
       const voters = data.users.filter(u => !u.isObserver && u.vote !== null);
       const isConsensus = voters.length >= MIN_VOTERS_FOR_CONSENSUS && data.stats.min === data.stats.max;
-      if (isConsensus) {
-        triggerConfetti(specialEffectsEnabled);
+      if (isConsensus && specialEffectsEnabled) {
+        triggerConfetti(true);
       }
 
-      // Animate participant cards after the flip animations settle.
-      // On consensus: cards dance in celebration; otherwise: tada-bounce (special effects only).
-      const cardAnimClass = isConsensus ? 'card-dance' : (specialEffectsEnabled ? 'tada-bounce' : null);
+      // Animate participant cards after the flip animations settle (special effects only).
+      const cardAnimClass = specialEffectsEnabled ? (isConsensus ? 'card-dance' : 'tada-bounce') : null;
       if (cardAnimClass) {
         participantsList.querySelectorAll('.participant-card').forEach((card, idx) => {
           const delay = Math.min(idx * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS) + TADA_BOUNCE_SETTLE_DELAY_MS;
