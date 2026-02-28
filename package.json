@@ -5,9 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "npm run test:unit && npm run test:e2e",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "npm run test:unit && npm run test:components && npm run test:e2e",
     "test:unit": "jest --coverage --forceExit",
+    "test:components": "vitest run --reporter=verbose",
+    "test:components:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:unit:watch": "jest --watch",
     "test:e2e:headed": "playwright test --headed",
@@ -24,6 +28,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "express-rate-limit": "^8.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "socket.io": "^4.6.1"
   },
   "engines": {
@@ -31,8 +37,16 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "jest": "^30.2.0",
+    "jsdom": "^26.1.0",
     "socket.io-client": "^4.8.3",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
   }
 }

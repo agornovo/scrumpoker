@@ -73,15 +73,21 @@ cd scrumpoker
 npm install
 ```
 
-3. Start the server:
+3. Start the backend server (in one terminal):
 ```bash
-npm start
+node server.js
 ```
 
-4. Open your browser and navigate to:
+4. Start the Vite frontend dev server (in a second terminal):
+```bash
+npm run dev
 ```
-http://localhost:8080
-```
+
+5. Open your browser and navigate to the URL shown by Vite (typically `http://localhost:5173`).
+   The Vite dev server proxies Socket.IO requests to the backend at `http://localhost:8080`.
+
+> **Production mode**: Run `npm run build` to compile the React frontend into `dist/`, then
+> `npm start` to serve everything from the single Node.js server on port 8080.
 
 ## Testing
 
@@ -89,14 +95,24 @@ The project includes comprehensive test coverage with both unit tests and end-to
 
 ### Running Tests
 
-Run all tests (unit + E2E):
+Run all tests (unit + component + E2E):
 ```bash
 npm test
 ```
 
-Run only unit tests:
+Run only backend unit tests:
 ```bash
 npm run test:unit
+```
+
+Run only React component tests (Vitest):
+```bash
+npm run test:components
+```
+
+Run component tests with coverage:
+```bash
+npm run test:components:coverage
 ```
 
 Run only E2E tests:
@@ -121,7 +137,7 @@ npm run test:e2e:headed
 
 ### Test Coverage
 
-Unit tests cover:
+Backend unit tests cover:
 - Health check endpoints
 - Room management (create, join, cleanup)
 - Voting functionality
@@ -130,6 +146,16 @@ Unit tests cover:
 - Multi-user collaboration
 - Observer mode
 - Card set selection and room-level broadcasting
+
+React component tests cover:
+- Card deck definitions and fallback behaviour
+- Client ID and room ID generation
+- Header theme toggle and palette selection
+- WelcomeScreen form validation and submission
+- Statistics display logic
+- Round history ordering and display
+- CardSelection deck rendering and vote toggling
+- ParticipantList badges, remove controls, and vote display
 
 E2E tests cover:
 - Joining rooms and user authentication
@@ -233,9 +259,10 @@ The deployment includes:
 ## Architecture
 
 - **Backend**: Node.js + Express + Socket.IO
-- **Frontend**: Vanilla JavaScript (no frameworks)
+- **Frontend**: React 18 (built with Vite)
+- **Component tests**: Vitest + React Testing Library
 - **Communication**: WebSocket for real-time updates
-- **Deployment**: Docker + OpenShift compatible
+- **Deployment**: Docker (multi-stage build) + OpenShift compatible
 
 ## Configuration
 

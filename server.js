@@ -30,7 +30,8 @@ function log(...args) {
   console.log(new Date().toISOString(), ...args);
 }
 
-// Serve static files from the public directory
+// Serve built React app from dist/ (production), fallback to public/ (development)
+app.use(express.static(path.join(__dirname, 'dist')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint for OpenShift
