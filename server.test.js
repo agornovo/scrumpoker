@@ -1,10 +1,11 @@
 const request = require('supertest');
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const socketIo = require('socket.io');
 const { io: Client } = require('socket.io-client');
 const packageJson = require('./package.json');
-const viteConfig = require('./vite.config');
 
 // Test timing constants
 const VERIFICATION_DELAY_MS = 1000; // Time to wait for all clients to receive final updates
@@ -2237,6 +2238,7 @@ describe('React migration shell tooling', () => {
   });
 
   test('targets dist output for client builds', () => {
-    expect(viteConfig.build.outDir).toBe('dist');
+    const configContents = fs.readFileSync(path.join(__dirname, 'vite.config.mjs'), 'utf8');
+    expect(configContents).toContain("outDir: 'dist'");
   });
 });
