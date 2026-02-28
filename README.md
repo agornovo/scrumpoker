@@ -83,6 +83,20 @@ npm start
 http://localhost:8080
 ```
 
+### React Migration Shell (in progress)
+
+An initial React + Vite shell is available for incremental migration work:
+
+```bash
+npm run dev:client
+```
+
+Create a production build of the React shell:
+
+```bash
+npm run build
+```
+
 ## Testing
 
 The project includes comprehensive test coverage with both unit tests and end-to-end tests.

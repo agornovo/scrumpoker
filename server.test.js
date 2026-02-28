@@ -3,6 +3,8 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const { io: Client } = require('socket.io-client');
+const packageJson = require('./package.json');
+const viteConfig = require('./vite.config');
 
 // Test timing constants
 const VERIFICATION_DELAY_MS = 1000; // Time to wait for all clients to receive final updates
@@ -2226,4 +2228,15 @@ describe('Host Takeover', () => {
       participant.emit('join-room', { roomId: 'HT_PRESENT', userName: 'Participant', isObserver: false });
     }, 50);
   }, 5000);
+});
+
+describe('React migration shell tooling', () => {
+  test('includes scripts for running and building the React client shell', () => {
+    expect(packageJson.scripts['dev:client']).toBe('vite');
+    expect(packageJson.scripts.build).toBe('vite build');
+  });
+
+  test('targets dist output for client builds', () => {
+    expect(viteConfig.build.outDir).toBe('dist');
+  });
 });
