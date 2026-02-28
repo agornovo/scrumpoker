@@ -24,7 +24,8 @@ module.exports = defineConfig({
   webServer: {
     command: 'node server.js',
     url: 'http://localhost:8080',
-    reuseExistingServer: !process.env.CI,
+    // Reuse an already-running server when BASE_URL is explicitly set (e.g. Docker mode)
+    reuseExistingServer: !!process.env.BASE_URL || !process.env.CI,
     timeout: 120 * 1000,
     env: {
       // Short timeouts so E2E host-takeover tests don't wait a full minute

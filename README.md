@@ -145,10 +145,17 @@ E2E tests cover:
 
 ### Continuous Integration
 
-The project uses GitHub Actions for CI/CD. The workflow runs:
+The project uses GitHub Actions for CI/CD. Two parallel jobs run on every push and pull request:
+
+**`test` job** (Node.js matrix: 18.x, 20.x, 24.x)
 - Unit tests with coverage reporting
-- E2E tests with Playwright
-- Tests on Node.js 18.x, 20.x, and 24.x
+- E2E tests with Playwright against `node server.js`
+
+**`docker-e2e` job**
+- Builds the production Docker image
+- Starts the container with short reconnect timeouts for test speed
+- Runs the full Playwright E2E test suite against the running Docker container
+- Uploads the Playwright HTML report as a CI artifact
 
 CI runs automatically on:
 - Push to main/master branches
