@@ -900,3 +900,122 @@ test.describe('Host Takeover', () => {
     await context2.close();
   });
 });
+
+test.describe('Easter Eggs', () => {
+  const KONAMI_KEYS = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+
+  test('should show toast when Konami code is typed with special effects on', async ({ page }) => {
+    await page.goto(BASE_URL);
+    await page.check('#special-effects');
+    await page.fill('#user-name', 'Gamer');
+    await page.click('#join-btn');
+
+    // Wait for room-update to arrive so specialEffectsEnabled is set
+    await expect(page.locator('#participant-count')).toHaveText('1');
+
+    for (const key of KONAMI_KEYS) {
+      await page.keyboard.press(key);
+    }
+
+    await expect(page.locator('.easter-egg-toast')).toBeVisible();
+    await expect(page.locator('.easter-egg-toast')).toContainText('+30 Lives');
+  });
+
+  test('should not show Konami toast when special effects are off', async ({ page }) => {
+    await page.goto(BASE_URL);
+    // Do NOT enable special effects
+    await page.fill('#user-name', 'Gamer');
+    await page.click('#join-btn');
+
+    await expect(page.locator('#participant-count')).toHaveText('1');
+
+    for (const key of KONAMI_KEYS) {
+      await page.keyboard.press(key);
+    }
+
+    await expect(page.locator('.easter-egg-toast')).not.toBeVisible();
+  });
+
+  test('should show coffee toast when all voters choose coffee with special effects on', async ({ browser }) => {
+    const roomId = 'COFFEETEST';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    // Host joins with Fibonacci deck and special effects
+    await page1.goto(BASE_URL);
+    await page1.selectOption('#card-set', 'fibonacci');
+    await page1.check('#special-effects');
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    // Participant joins (inherits the room's Fibonacci deck)
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Wait for both to see each other
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+
+    // Both vote coffee
+    await page1.click('.card-button[data-value="\u2615"]');
+    await page2.click('.card-button[data-value="\u2615"]');
+
+    // Host reveals
+    await page1.click('#reveal-btn');
+
+    // Both participants should see the coffee break toast
+    await expect(page1.locator('.easter-egg-toast')).toBeVisible();
+    await expect(page1.locator('.easter-egg-toast')).toContainText('Coffee Break');
+    await expect(page2.locator('.easter-egg-toast')).toBeVisible();
+    await expect(page2.locator('.easter-egg-toast')).toContainText('Coffee Break');
+
+    await context1.close();
+    await context2.close();
+  });
+
+  test('should show quick-win toast when all voters agree on 1 with special effects on', async ({ browser }) => {
+    const roomId = 'QUICKWINTEST';
+
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    // Host joins with special effects enabled
+    await page1.goto(BASE_URL);
+    await page1.check('#special-effects');
+    await page1.fill('#user-name', 'Host');
+    await page1.fill('#room-id', roomId);
+    await page1.click('#join-btn');
+
+    // Participant joins
+    await page2.goto(BASE_URL);
+    await page2.fill('#user-name', 'Participant');
+    await page2.fill('#room-id', roomId);
+    await page2.click('#join-btn');
+
+    // Wait for both to see each other
+    await expect(page1.locator('#participant-count')).toHaveText('2');
+
+    // Both vote 1
+    await page1.click('.card-button[data-value="1"]');
+    await page2.click('.card-button[data-value="1"]');
+
+    // Host reveals
+    await page1.click('#reveal-btn');
+
+    // Both should see the quick-win toast
+    await expect(page1.locator('.easter-egg-toast')).toBeVisible();
+    await expect(page1.locator('.easter-egg-toast')).toContainText('Quick win');
+    await expect(page2.locator('.easter-egg-toast')).toBeVisible();
+    await expect(page2.locator('.easter-egg-toast')).toContainText('Quick win');
+
+    await context1.close();
+    await context2.close();
+  });
+});

@@ -919,8 +919,8 @@ socket.on('room-update', (data) => {
       const isConsensus = voters.length >= MIN_VOTERS_FOR_CONSENSUS && data.stats.min === data.stats.max;
       if (isConsensus && specialEffectsEnabled) {
         triggerConfetti(true);
-        if (data.stats.min === 42) {
-          showEasterEggToast('🌌 The Answer to Life, the Universe, and Everything!');
+        if (data.stats.min === 1) {
+          showEasterEggToast('🎯 Quick win! Everyone agrees this is tiny.');
         }
       }
 
