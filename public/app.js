@@ -325,6 +325,15 @@ function triggerCardSparkle(buttonEl) {
   SoundEffects.cardSelect();
 }
 
+// Easter egg: brief full-screen toast message (special effects only)
+function showEasterEggToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'easter-egg-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  toast.addEventListener('animationend', () => toast.remove(), { once: true });
+}
+
 // State
 let currentRoomId = null;
 let currentUserName = null;
@@ -342,6 +351,23 @@ const PALETTE_STORAGE_KEY = 'scrumpoker-palette';
 const SOUND_MUTED_STORAGE_KEY = 'scrumpoker-sound-muted';
 const SESSION_STORAGE_KEY = 'scrumpoker-session';
 const CLIENT_ID_STORAGE_KEY = 'scrumpoker-client-id';
+
+// Easter egg: Konami code ↑↑↓↓←→←→BA (only active with special effects on)
+const KONAMI_CODE = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+let konamiIndex = 0;
+document.addEventListener('keydown', (e) => {
+  if (!specialEffectsEnabled) { konamiIndex = 0; return; }
+  if (e.key === KONAMI_CODE[konamiIndex]) {
+    konamiIndex++;
+    if (konamiIndex === KONAMI_CODE.length) {
+      konamiIndex = 0;
+      triggerConfetti(true);
+      showEasterEggToast('🎮 +30 Lives!');
+    }
+  } else {
+    konamiIndex = e.key === KONAMI_CODE[0] ? 1 : 0;
+  }
+});
 
 // Per-tab client ID used by the server to restore sessions after a page refresh
 let clientId;
@@ -893,6 +919,9 @@ socket.on('room-update', (data) => {
       const isConsensus = voters.length >= MIN_VOTERS_FOR_CONSENSUS && data.stats.min === data.stats.max;
       if (isConsensus && specialEffectsEnabled) {
         triggerConfetti(true);
+        if (data.stats.min === 42) {
+          showEasterEggToast('🌌 The Answer to Life, the Universe, and Everything!');
+        }
       }
 
       // Animate participant cards after the flip animations settle (special effects only).
@@ -913,6 +942,15 @@ socket.on('room-update', (data) => {
     statMedian.textContent = '-';
     statMin.textContent = '-';
     statMax.textContent = '-';
+
+    // Easter egg: all voters chose ☕ (special effects only)
+    if (justRevealed && specialEffectsEnabled) {
+      const eligibleVoters = data.users.filter(u => !u.isObserver && u.vote !== null);
+      if (eligibleVoters.length >= MIN_VOTERS_FOR_CONSENSUS && eligibleVoters.every(u => String(u.vote) === '☕')) {
+        triggerConfetti(false);
+        showEasterEggToast('☕ Coffee Break Time!');
+      }
+    }
   }
 
   // Update button states
