@@ -811,6 +811,9 @@ socket.on('room-update', (data) => {
       card.classList.add('observer');
     } else if (user.vote === 'voted') {
       card.classList.add('voted');
+      if (!data.revealed) {
+        card.classList.add('face-down');
+      }
     }
 
     // Add remove button if current user is the room creator and this is not their own card
