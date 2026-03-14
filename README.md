@@ -22,7 +22,8 @@ A real-time networked scrum poker application for agile teams to estimate user s
 ## Features
 
 - 🃏 **Real-time Collaboration** - Multiple users can join the same room and vote simultaneously
-- 🎴 **Playing Card Backs** - Face-down cards display an intricate navy-blue diamond-lattice pattern with ornate inner frame, just like real playing cards
+- 🎴 **Playing Card Shape** - Participant cards are proper portrait playing-card proportions (2:3 aspect ratio). The card back shows an intricate navy-blue diamond-lattice pattern with ornate inner frame; only the vote value appears on the face — no other info inside the card
+- 🔄 **3-D Card Flip on Reveal** - Cards smoothly flip with a staggered CSS 3-D rotation when the host reveals votes, back-to-front one by one
 - 📊 **Instant Results** - See statistics (average, median, min, max) when cards are revealed
 - 🎴 **Multiple Card Sets** - Choose from Standard [1-100], Fibonacci, T-Shirt Sizes, or Powers of 2
 - 👥 **Observer Mode** - Join as an observer without voting

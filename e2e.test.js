@@ -130,23 +130,23 @@ test.describe('Scrum Poker Application', () => {
     await page.click('#join-btn');
     
     const card = page.locator('.card-button[data-value="8"]');
-    const participantVote = page.locator('.participant-vote').first();
+    const participantCard = page.locator('.participant-card').first();
     
-    // Initially should show "..."
-    await expect(participantVote).toContainText('...');
+    // Initially the participant card should not be in the voted state
+    await expect(participantCard).not.toHaveClass(/voted/);
     
     // First click - select
     await card.click();
     await expect(card).toHaveClass(/selected/);
     
-    // Should show checkmark after voting
-    await expect(participantVote).toContainText('✓');
+    // Card should be in the voted state (card back pattern visible)
+    await expect(participantCard).toHaveClass(/voted/);
     
     // Second click - deselect
     await card.click();
     
-    // Should go back to "..." after deselecting
-    await expect(participantVote).toContainText('...');
+    // Should go back to unvoted state
+    await expect(participantCard).not.toHaveClass(/voted/);
     await expect(card).not.toHaveClass(/selected/);
   });
 
@@ -174,14 +174,14 @@ test.describe('Scrum Poker Application', () => {
     // Wait for participant card to appear
     await expect(page.locator('.participant-card')).toBeVisible();
     
-    // Initially should show "..."
-    await expect(page.locator('.participant-vote')).toContainText('...');
+    // Initially the card should not be in the voted state
+    await expect(page.locator('.participant-card')).not.toHaveClass(/voted/);
     
     // Vote
     await page.click('.card-button[data-value="5"]');
     
-    // Should show checkmark
-    await expect(page.locator('.participant-vote')).toContainText('✓');
+    // Card back (navy pattern) should be shown – card is in voted state
+    await expect(page.locator('.participant-card')).toHaveClass(/voted/);
   });
 
   test('should copy room ID to clipboard', async ({ page }) => {
@@ -345,9 +345,9 @@ test.describe('Multi-user Collaboration', () => {
     // Alice votes
     await page1.click('.card-button[data-value="5"]');
     
-    // Bob should see Alice voted (but not the value)
+    // Bob should see Alice voted (card in voted state with navy pattern, value hidden)
     const aliceCard = page2.locator('.participant-card').filter({ hasText: 'Alice' });
-    await expect(aliceCard.locator('.participant-vote')).toContainText('✓');
+    await expect(aliceCard).toHaveClass(/voted/);
     
     await context1.close();
     await context2.close();
@@ -436,9 +436,9 @@ test.describe('Multi-user Collaboration', () => {
     await expect(page1.locator('#statistics')).toHaveClass(/hidden/);
     await expect(page2.locator('#statistics')).toHaveClass(/hidden/);
     
-    // Votes should be cleared
-    await expect(page1.locator('.participant-vote').first()).toContainText('...');
-    await expect(page2.locator('.participant-vote').first()).toContainText('...');
+    // Votes should be cleared (participant cards no longer in voted/flipped state)
+    await expect(page1.locator('.participant-card').first()).not.toHaveClass(/voted/);
+    await expect(page2.locator('.participant-card').first()).not.toHaveClass(/voted/);
     
     // Selected cards should be cleared
     await expect(page1.locator('.card-button.selected')).toHaveCount(0);
@@ -500,11 +500,11 @@ test.describe('Multi-user Collaboration', () => {
     await expect(page1.locator('#stat-min')).toHaveText('-');
     await expect(page1.locator('#stat-max')).toHaveText('-');
 
-    // Participant vote displays must be cleared (no round-1 numbers visible)
-    const voteEls1 = page1.locator('.participant-card:not(.observer) .participant-vote');
-    const count = await voteEls1.count();
+    // Participant cards must be in unvoted state (no round-1 numbers visible)
+    const nonObserverCards1 = page1.locator('.participant-card:not(.observer)');
+    const count = await nonObserverCards1.count();
     for (let i = 0; i < count; i++) {
-      await expect(voteEls1.nth(i)).toContainText('...');
+      await expect(nonObserverCards1.nth(i)).not.toHaveClass(/voted/);
     }
 
     // Statistics also hidden for the other participant after server update

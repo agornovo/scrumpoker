@@ -766,12 +766,12 @@ resetBtn.addEventListener('click', () => {
   statMin.textContent = '-';
   statMax.textContent = '-';
 
-  // Immediately clear participant vote values so the previous round's
+  // Immediately reset participant card appearance so the previous round's
   // results are not visible while we wait for the server's room-update
-  participantsList.querySelectorAll('.participant-card:not(.observer) .participant-vote').forEach(voteEl => {
-    voteEl.textContent = '...';
-    voteEl.style.color = '#dee2e6';
-    voteEl.classList.remove('hidden-vote');
+  participantsList.querySelectorAll('.participant-card:not(.observer)').forEach(card => {
+    card.classList.remove('voted', 'flipped');
+    const voteDiv = card.querySelector('.participant-vote');
+    if (voteDiv) voteDiv.textContent = '';
   });
 });
 
@@ -806,17 +806,45 @@ socket.on('room-update', (data) => {
   data.users.forEach((user, index) => {
     const card = document.createElement('div');
     card.className = 'participant-card';
-    
+
     if (user.isObserver) {
       card.classList.add('observer');
-    } else if (user.vote === 'voted') {
+    } else if (user.vote === 'voted' || (data.revealed && user.vote !== null)) {
       card.classList.add('voted');
-      if (!data.revealed) {
-        card.classList.add('face-down');
-      }
     }
 
-    // Add remove button if current user is the room creator and this is not their own card
+    // Determine if the card should show its face (front side)
+    const shouldBeFlipped = user.isObserver ||
+      (data.revealed && !user.isObserver && user.vote !== null && !justRevealed);
+    if (shouldBeFlipped) {
+      card.classList.add('flipped');
+    }
+
+    // ── 3-D flip structure ──────────────────────────────────────────────────
+    const cardInner = document.createElement('div');
+    cardInner.className = 'card-inner';
+
+    const cardBack = document.createElement('div');
+    cardBack.className = 'card-face card-back';
+
+    const cardFront = document.createElement('div');
+    cardFront.className = 'card-face card-front';
+
+    const voteDiv = document.createElement('div');
+    voteDiv.className = 'participant-vote';
+    if (user.isObserver) {
+      voteDiv.textContent = '👁️';
+    } else if (data.revealed) {
+      voteDiv.textContent = user.vote !== null ? user.vote : '-';
+    }
+    // (no text shown on front while face-down – the card back covers it)
+
+    cardFront.appendChild(voteDiv);
+    cardInner.appendChild(cardBack);
+    cardInner.appendChild(cardFront);
+    card.appendChild(cardInner);
+
+    // Remove button – positioned absolute on the slot, outside the card shape
     if (data.creatorId === socket.id && user.id !== socket.id) {
       const removeBtn = document.createElement('button');
       removeBtn.className = 'remove-participant-btn';
@@ -833,32 +861,11 @@ socket.on('room-update', (data) => {
       card.appendChild(removeBtn);
     }
 
+    // Name and badges live BELOW the card shape (outside card-inner)
     const nameDiv = document.createElement('div');
     nameDiv.className = 'participant-name';
     nameDiv.textContent = user.name;
-
-    const voteDiv = document.createElement('div');
-    voteDiv.className = 'participant-vote';
-
-    if (user.isObserver) {
-      voteDiv.textContent = '👁️';
-      voteDiv.style.color = '#6c757d';
-    } else if (data.revealed) {
-      voteDiv.textContent = user.vote !== null ? user.vote : '-';
-      if (justRevealed && user.vote !== null) {
-        voteDiv.style.animationDelay = `${Math.min(index * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS)}ms`;
-        voteDiv.classList.add('flip-reveal');
-      }
-    } else if (user.vote === 'voted') {
-      voteDiv.textContent = '✓';
-      voteDiv.classList.add('hidden-vote');
-    } else {
-      voteDiv.textContent = '...';
-      voteDiv.style.color = '#dee2e6';
-    }
-
     card.appendChild(nameDiv);
-    card.appendChild(voteDiv);
 
     if (user.isObserver) {
       const badge = document.createElement('div');
@@ -867,7 +874,6 @@ socket.on('room-update', (data) => {
       card.appendChild(badge);
     }
 
-    // Add host badge for the room creator
     if (user.id === data.creatorId) {
       const hostBadge = document.createElement('div');
       hostBadge.className = 'participant-badge host';
@@ -876,6 +882,12 @@ socket.on('room-update', (data) => {
     }
 
     participantsList.appendChild(card);
+
+    // Staggered 3-D flip for the reveal moment
+    if (justRevealed && !user.isObserver && user.vote !== null) {
+      const flipDelay = Math.min(index * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS);
+      setTimeout(() => card.classList.add('flipped'), flipDelay);
+    }
   });
 
   // Update statistics
