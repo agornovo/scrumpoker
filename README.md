@@ -26,7 +26,7 @@ A real-time networked scrum poker application for agile teams to estimate user s
 - 🔄 **3-D Card Flip on Reveal** - Cards smoothly flip with a staggered CSS 3-D rotation when the host reveals votes, back-to-front one by one
 - 📊 **Instant Results** - See statistics (average, median, min, max) when cards are revealed
 - 🎴 **Multiple Card Sets** - Choose from Standard [1-100], Fibonacci, T-Shirt Sizes, or Powers of 2
-- 👥 **Observer Mode** - Join as an observer without voting
+- 👥 **Observer Mode** - Join as an observer without voting; observers appear in a compact strip below the voter cards (not as a playing card), keeping the card grid clean
 - 🌓 **Theme Toggle** - Switch between light and dark themes (saved per browser)
 - 🎨 **Color Palettes** - 8 built-in color palettes (Ocean, Forest, Sunset, Violet, Rose, Teal, Crimson, Slate)
 - 📝 **Story Title** - Host can label each round with a story title or ticket number

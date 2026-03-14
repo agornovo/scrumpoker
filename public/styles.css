@@ -662,7 +662,7 @@ header h1 {
   box-shadow: var(--shadow-sm);
 }
 
-/* ===== Participant list: wrap cards in a flex row ===== */
+/* ===== Participant list: flex container with wrapping ===== */
 .participants-list {
   display: flex;
   flex-wrap: wrap;
@@ -769,16 +769,6 @@ header h1 {
   border-color: var(--success-color);
 }
 
-/* Observer: always show card front, slightly muted */
-.participant-card.observer .card-inner {
-  opacity: 0.8;
-}
-
-.participant-card.observer .card-front {
-  background: var(--lighter-bg);
-  border-color: var(--border-color);
-}
-
 /* ===== Vote value on the card face ===== */
 .participant-vote {
   font-size: 1.8rem;
@@ -847,6 +837,66 @@ header h1 {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--card-primary) 100%);
   font-weight: 700;
   box-shadow: var(--shadow-sm);
+}
+
+/* ===== Observers strip (compact, below card grid) ===== */
+.observers-section {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.78rem;
+  color: var(--medium-text);
+}
+
+.observers-label {
+  font-weight: 600;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.observers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.observer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--lighter-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 2px 10px 2px 8px;
+  font-size: 0.78rem;
+  color: var(--medium-text);
+  font-weight: 500;
+}
+
+.observer-chip.host {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.observer-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--medium-text);
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 0 0 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.observer-remove-btn:hover {
+  opacity: 1;
+  color: var(--danger-color);
 }
 
 .card-selection {

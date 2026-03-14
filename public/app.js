@@ -16,6 +16,8 @@ const copyShareLinkBtn = document.getElementById('copy-share-link');
 const leaveRoomBtn = document.getElementById('leave-room');
 const participantsList = document.getElementById('participants-list');
 const participantCount = document.getElementById('participant-count');
+const observersSection = document.getElementById('observers-section');
+const observersList = document.getElementById('observers-list');
 const cardSelection = document.getElementById('card-selection');
 const cardsContainer = document.getElementById('cards-container');
 const revealBtn = document.getElementById('reveal-btn');
@@ -768,9 +770,9 @@ resetBtn.addEventListener('click', () => {
 
   // Immediately reset participant card appearance so the previous round's
   // results are not visible while we wait for the server's room-update
-  participantsList.querySelectorAll('.participant-card:not(.observer)').forEach(card => {
+  participantsList.querySelectorAll('.participant-card').forEach(card => {
     card.classList.remove('voted', 'flipped');
-    const voteDiv = card.querySelector('.participant-vote');
+    const voteDiv = card.querySelector('.card-front .participant-vote');
     if (voteDiv) voteDiv.textContent = '';
   });
 });
@@ -799,24 +801,27 @@ socket.on('room-update', (data) => {
     renderCards(currentCardSet);
   }
 
-  // Update participants
+  // Update participants — split voters and observers
   participantsList.innerHTML = '';
-  participantCount.textContent = data.users.length;
+  observersList.innerHTML = '';
 
-  data.users.forEach((user, index) => {
+  const voters = data.users.filter(u => !u.isObserver);
+  const observers = data.users.filter(u => u.isObserver);
+
+  // Count only voters in the badge
+  participantCount.textContent = voters.length;
+
+  voters.forEach((user, index) => {
     const card = document.createElement('div');
     card.className = 'participant-card';
 
-    if (user.isObserver) {
-      card.classList.add('observer');
-    } else if (user.vote === 'voted' || (data.revealed && user.vote !== null)) {
+    if (user.vote === 'voted' || (data.revealed && user.vote !== null)) {
       card.classList.add('voted');
     }
 
-    // Determine if the card should show its face (front side)
-    const shouldBeFlipped = user.isObserver ||
-      (data.revealed && user.vote !== null && !justRevealed);
-    if (shouldBeFlipped) {
+    // Start with the card already showing its front face when it was previously revealed
+    const shouldShowFront = data.revealed && user.vote !== null && !justRevealed;
+    if (shouldShowFront) {
       card.classList.add('flipped');
     }
 
@@ -832,9 +837,7 @@ socket.on('room-update', (data) => {
 
     const voteDiv = document.createElement('div');
     voteDiv.className = 'participant-vote';
-    if (user.isObserver) {
-      voteDiv.textContent = '👁️';
-    } else if (data.revealed) {
+    if (data.revealed) {
       voteDiv.textContent = user.vote !== null ? user.vote : '-';
     }
     // (no text shown on front while face-down – the card back covers it)
@@ -861,18 +864,11 @@ socket.on('room-update', (data) => {
       card.appendChild(removeBtn);
     }
 
-    // Name and badges live BELOW the card shape (outside card-inner)
+    // Name and host badge live BELOW the card shape (outside card-inner)
     const nameDiv = document.createElement('div');
     nameDiv.className = 'participant-name';
     nameDiv.textContent = user.name;
     card.appendChild(nameDiv);
-
-    if (user.isObserver) {
-      const badge = document.createElement('div');
-      badge.className = 'participant-badge';
-      badge.textContent = 'Observer';
-      card.appendChild(badge);
-    }
 
     if (user.id === data.creatorId) {
       const hostBadge = document.createElement('div');
@@ -885,11 +881,45 @@ socket.on('room-update', (data) => {
 
     // Staggered 3-D flip for the reveal moment.
     // Delay is capped at VOTE_FLIP_MAX_DELAY_MS so large teams don't wait too long.
-    if (justRevealed && !user.isObserver && user.vote !== null) {
+    if (justRevealed && user.vote !== null) {
       const flipDelay = Math.min(index * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS);
       setTimeout(() => card.classList.add('flipped'), flipDelay);
     }
   });
+
+  // ── Observer list (compact chips) ─────────────────────────────────────────
+  if (observers.length > 0) {
+    observersSection.classList.remove('hidden');
+    observers.forEach(user => {
+      const chip = document.createElement('span');
+      chip.className = 'observer-chip';
+      chip.textContent = user.name;
+      if (user.id === data.creatorId) {
+        chip.classList.add('host');
+        chip.title = 'Host & Observer';
+      }
+      // Remove button for host
+      if (data.creatorId === socket.id && user.id !== socket.id) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'observer-remove-btn';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = `Remove ${user.name}`;
+        removeBtn.setAttribute('aria-label', `Remove ${user.name}`);
+        removeBtn.onclick = () => {
+          if (confirm(`Remove ${user.name} from the room?`)) {
+            socket.emit('remove-participant', {
+              roomId: currentRoomId,
+              participantId: user.id
+            });
+          }
+        };
+        chip.appendChild(removeBtn);
+      }
+      observersList.appendChild(chip);
+    });
+  } else {
+    observersSection.classList.add('hidden');
+  }
 
   // Update statistics
   if (data.revealed && data.stats) {

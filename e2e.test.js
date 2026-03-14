@@ -501,10 +501,10 @@ test.describe('Multi-user Collaboration', () => {
     await expect(page1.locator('#stat-max')).toHaveText('-');
 
     // Participant cards must be in unvoted state (no round-1 numbers visible)
-    const nonObserverCards1 = page1.locator('.participant-card:not(.observer)');
-    const count = await nonObserverCards1.count();
+    const participantCards1 = page1.locator('.participant-card');
+    const count = await participantCards1.count();
     for (let i = 0; i < count; i++) {
-      await expect(nonObserverCards1.nth(i)).not.toHaveClass(/voted/);
+      await expect(participantCards1.nth(i)).not.toHaveClass(/voted/);
     }
 
     // Statistics also hidden for the other participant after server update
@@ -570,10 +570,9 @@ test.describe('Multi-user Collaboration', () => {
     await page2.check('#is-observer');
     await page2.click('#join-btn');
     
-    // Verify observer badge
-    const observerCard = page1.locator('.participant-card.observer');
-    await expect(observerCard).toBeVisible();
-    await expect(observerCard.locator('.participant-badge')).toContainText('Observer');
+    // Verify observer appears in the observer strip (not as a playing card)
+    await expect(page1.locator('#observers-section')).toBeVisible();
+    await expect(page1.locator('.observer-chip')).toContainText('Observer');
     
     // Voter votes
     await page1.click('.card-button[data-value="5"]');
