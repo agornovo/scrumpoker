@@ -51,7 +51,8 @@ const CARD_DECKS = {
       { value: 20, label: '20' },
       { value: 40, label: '40' },
       { value: 100, label: '100' },
-      { value: '?', label: '?', special: true }
+      { value: '?', label: '?', special: true },
+      { value: '☕', label: '☕', special: true }
     ]
   },
   fibonacci: {
@@ -81,7 +82,8 @@ const CARD_DECKS = {
       { value: 'L', label: 'L' },
       { value: 'XL', label: 'XL' },
       { value: 'XXL', label: 'XXL' },
-      { value: '?', label: '?', special: true }
+      { value: '?', label: '?', special: true },
+      { value: '☕', label: '☕', special: true }
     ]
   },
   powers2: {
@@ -94,7 +96,8 @@ const CARD_DECKS = {
       { value: 16, label: '16' },
       { value: 32, label: '32' },
       { value: 64, label: '64' },
-      { value: '?', label: '?', special: true }
+      { value: '?', label: '?', special: true },
+      { value: '☕', label: '☕', special: true }
     ]
   }
 };

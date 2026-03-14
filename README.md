@@ -46,10 +46,10 @@ Choose from four card sets when creating a room:
 
 | Card Set | Values |
 |---|---|
-| **Standard** *(default)* | 1, 2, 3, 5, 8, 13, 20, 40, 100, ? |
+| **Standard** *(default)* | 1, 2, 3, 5, 8, 13, 20, 40, 100, ?, ☕ |
 | **Fibonacci** | 0, ½, 1, 2, 3, 5, 8, 13, 21, 34, 55, ?, ☕ |
-| **T-Shirt Sizes** | XS, S, M, L, XL, XXL, ? |
-| **Powers of 2** | 1, 2, 4, 8, 16, 32, 64, ? |
+| **T-Shirt Sizes** | XS, S, M, L, XL, XXL, ?, ☕ |
+| **Powers of 2** | 1, 2, 4, 8, 16, 32, 64, ?, ☕ |
 
 The card set is chosen by the room creator at join time and applies to all participants in the room.
 
