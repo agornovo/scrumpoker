@@ -815,7 +815,7 @@ socket.on('room-update', (data) => {
 
     // Determine if the card should show its face (front side)
     const shouldBeFlipped = user.isObserver ||
-      (data.revealed && !user.isObserver && user.vote !== null && !justRevealed);
+      (data.revealed && user.vote !== null && !justRevealed);
     if (shouldBeFlipped) {
       card.classList.add('flipped');
     }
@@ -883,7 +883,8 @@ socket.on('room-update', (data) => {
 
     participantsList.appendChild(card);
 
-    // Staggered 3-D flip for the reveal moment
+    // Staggered 3-D flip for the reveal moment.
+    // Delay is capped at VOTE_FLIP_MAX_DELAY_MS so large teams don't wait too long.
     if (justRevealed && !user.isObserver && user.vote !== null) {
       const flipDelay = Math.min(index * VOTE_FLIP_DELAY_INCREMENT_MS, VOTE_FLIP_MAX_DELAY_MS);
       setTimeout(() => card.classList.add('flipped'), flipDelay);
