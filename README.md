@@ -132,6 +132,7 @@ Unit tests cover:
 - Multi-user collaboration
 - Observer mode
 - Card set selection and room-level broadcasting
+- **Stress test** – 30 concurrent rooms with 8 voters each completing a full vote-and-reveal cycle (240 simultaneous Socket.IO connections)
 
 E2E tests cover:
 - Joining rooms and user authentication
