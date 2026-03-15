@@ -2114,28 +2114,35 @@ describe('Reconnection edge cases', () => {
     // Covers lines 93-94: room.creatorId is updated to new socket when host reconnects
     const host = Client(serverUrl);
     const participant = Client(serverUrl);
-    let joinCount = 0;
+    let allJoined = false;
 
-    const handleJoin = () => {
-      joinCount++;
-      if (joinCount === 2) {
+    // Only listen on host to avoid double-counting with participant's room-update callback
+    host.on('room-update', (data) => {
+      if (!allJoined && data.users && data.users.length === 2) {
+        allJoined = true;
         host.disconnect();
 
-        setTimeout(() => {
-          const host2 = Client(serverUrl);
-          host2.once('room-update', (data) => {
-            expect(data.creatorId).toBe(host2.id);
-            host2.disconnect();
-            participant.disconnect();
-            done();
-          });
-          host2.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Host', isObserver: false, clientId: 'host-role-cid' });
-        }, 30);
+        // Poll pendingRemovals until the server has processed the disconnect, then reconnect.
+        // A fixed setTimeout is unreliable because the server disconnect is async.
+        const waitForEntry = () => {
+          if (pendingRemovals.has('host-role-cid')) {
+            const host2 = Client(serverUrl);
+            host2.on('connect', () => {
+              host2.once('room-update', (data) => {
+                expect(data.creatorId).toBe(host2.id);
+                host2.disconnect();
+                participant.disconnect();
+                done();
+              });
+              host2.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Host', isObserver: false, clientId: 'host-role-cid' });
+            });
+          } else {
+            setTimeout(waitForEntry, 10);
+          }
+        };
+        waitForEntry();
       }
-    };
-
-    host.on('room-update', handleJoin);
-    participant.on('room-update', handleJoin);
+    });
 
     host.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Host', isObserver: false, clientId: 'host-role-cid' });
     setTimeout(() => {
@@ -2818,6 +2825,7 @@ describe('Final branch coverage', () => {
   let server;
   let io;
   let rooms;
+  let pendingRemovals;
   let serverUrl;
 
   beforeEach((done) => {
@@ -2825,6 +2833,7 @@ describe('Final branch coverage', () => {
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
+    pendingRemovals = testServer.pendingRemovals;
     server.listen(() => {
       serverUrl = `http://localhost:${server.address().port}`;
       done();
@@ -2857,6 +2866,12 @@ describe('Final branch coverage', () => {
             // Non-host's vote/name should be preserved
             const nonHostUser = data.users.find(u => u.name === 'NonHost');
             expect(nonHostUser).toBeDefined();
+            // Cancel nonHost2's pending grace-period timer to avoid post-test async logs
+            const entry = pendingRemovals.get('nonhost-reconnect-cid');
+            if (entry) {
+              clearTimeout(entry.timer);
+              pendingRemovals.delete('nonhost-reconnect-cid');
+            }
             nonHost2.disconnect();
             host.disconnect();
             done();
