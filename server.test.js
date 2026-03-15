@@ -1,321 +1,10 @@
 const request = require('supertest');
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
 const { io: Client } = require('socket.io-client');
+const { createServer } = require('./server');
 
 // Test timing constants
 const VERIFICATION_DELAY_MS = 1000; // Time to wait for all clients to receive final updates
 const BATCH_JOIN_DELAY_MS = 500; // Time between batches of users joining
-
-// Create a test server for each test
-function createTestServer({ reconnectGracePeriodMs = 0, hostAbsentTimeoutMs = 0 } = {}) {
-  const app = express();
-  const server = http.createServer(app);
-  const io = socketIo(server);
-  
-  const rooms = new Map();
-  const pendingRemovals = new Map(); // clientId -> { timer, roomId, oldSocketId, userData }
-  
-  // Health check endpoints
-  app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
-  
-  app.get('/ready', (req, res) => {
-    res.status(200).json({ status: 'ready' });
-  });
-  
-  // Socket.IO logic
-  io.on('connection', (socket) => {
-  // Join a room
-  socket.on('join-room', ({ roomId, userName, isObserver, cardSet, specialEffects, clientId }) => {
-    if (clientId) socket.clientId = clientId;
-
-    // Check if this is a reconnecting user within the grace period
-    if (clientId && pendingRemovals.has(clientId)) {
-      const pending = pendingRemovals.get(clientId);
-      if (pending.roomId === roomId) {
-        clearTimeout(pending.timer);
-        pendingRemovals.delete(clientId);
-
-        const room = rooms.get(roomId);
-        if (room) {
-          room.users.delete(pending.oldSocketId);
-          room.users.set(socket.id, {
-            name: pending.userData.name,
-            vote: pending.userData.vote,
-            isObserver: pending.userData.isObserver
-          });
-
-          if (room.creatorId === pending.oldSocketId) {
-            room.creatorId = socket.id;
-            if (room.hostAbsentTimer) {
-              clearTimeout(room.hostAbsentTimer);
-              room.hostAbsentTimer = null;
-            }
-          }
-
-          socket.join(roomId);
-          socket.roomId = roomId;
-          emitRoomUpdate(roomId);
-          return;
-        }
-      } else {
-        clearTimeout(pending.timer);
-        const oldRoom = rooms.get(pending.roomId);
-        if (oldRoom) {
-          oldRoom.users.delete(pending.oldSocketId);
-          if (oldRoom.users.size === 0) {
-            rooms.delete(pending.roomId);
-          } else {
-            emitRoomUpdate(pending.roomId);
-          }
-        }
-        pendingRemovals.delete(clientId);
-      }
-    }
-
-    if (!rooms.has(roomId)) {
-      rooms.set(roomId, {
-        id: roomId,
-        users: new Map(),
-        revealed: false,
-        createdAt: new Date(),
-        creatorId: socket.id,
-        cardSet: cardSet || 'standard',
-        storyTitle: '',
-        autoReveal: false,
-        specialEffects: !!specialEffects,
-        hostAbsentTimer: null
-      });
-    }
-      
-      const room = rooms.get(roomId);
-      room.users.set(socket.id, {
-        name: userName || `User ${room.users.size + 1}`,
-        vote: null,
-        isObserver: isObserver || false
-      });
-      
-      socket.join(roomId);
-      socket.roomId = roomId;
-      
-      emitRoomUpdate(roomId);
-    });
-    
-    socket.on('vote', ({ roomId, vote }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-
-      // Prevent vote changes after cards are revealed
-      if (room.revealed) return;
-      
-      const user = room.users.get(socket.id);
-      if (!user) return;
-      
-      user.vote = vote;
-
-      // Auto-reveal: if enabled and all non-observer voters have voted, reveal cards
-      if (room.autoReveal && !room.revealed) {
-        const voters = Array.from(room.users.values()).filter(u => !u.isObserver);
-        const allVoted = voters.length > 0 && voters.every(u => u.vote !== null);
-        if (allVoted) {
-          room.revealed = true;
-        }
-      }
-
-      emitRoomUpdate(roomId);
-    });
-    
-    socket.on('reveal', ({ roomId }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      
-      // Only the room creator can reveal cards
-      if (socket.id !== room.creatorId) {
-        console.log(`Unauthorized reveal attempt by ${socket.id} in room ${roomId}`);
-        return;
-      }
-      
-      room.revealed = true;
-      emitRoomUpdate(roomId);
-    });
-    
-    socket.on('reset', ({ roomId }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      
-      // Only the room creator can reset votes
-      if (socket.id !== room.creatorId) {
-        console.log(`Unauthorized reset attempt by ${socket.id} in room ${roomId}`);
-        return;
-      }
-      
-      room.revealed = false;
-      room.users.forEach(user => {
-        user.vote = null;
-      });
-      emitRoomUpdate(roomId);
-    });
-
-    socket.on('set-story', ({ roomId, storyTitle }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      if (socket.id !== room.creatorId) return;
-      room.storyTitle = typeof storyTitle === 'string' ? storyTitle.substring(0, 200) : '';
-      emitRoomUpdate(roomId);
-    });
-
-    socket.on('toggle-auto-reveal', ({ roomId, autoReveal }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      if (socket.id !== room.creatorId) return;
-      room.autoReveal = !!autoReveal;
-      emitRoomUpdate(roomId);
-    });
-
-    socket.on('remove-participant', ({ roomId, participantId }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      
-      if (socket.id !== room.creatorId) return;
-      if (participantId === socket.id) return;
-      
-      if (room.users.has(participantId)) {
-        room.users.delete(participantId);
-
-        // Cancel any pending reconnect grace period for the removed user
-        for (const [cid, pending] of pendingRemovals.entries()) {
-          if (pending.oldSocketId === participantId) {
-            clearTimeout(pending.timer);
-            pendingRemovals.delete(cid);
-            break;
-          }
-        }
-        
-        const targetSocket = io.sockets.sockets.get(participantId);
-        if (targetSocket) {
-          targetSocket.emit('removed-from-room', { roomId });
-          targetSocket.leave(roomId);
-          targetSocket.roomId = null;
-        }
-        
-        emitRoomUpdate(roomId);
-      }
-    });
-    
-    socket.on('disconnect', () => {
-      const roomId = socket.roomId;
-      if (roomId) {
-        const room = rooms.get(roomId);
-        if (room && room.users.has(socket.id)) {
-          const clientId = socket.clientId;
-          if (clientId && reconnectGracePeriodMs > 0) {
-            const userData = { ...room.users.get(socket.id) };
-            const oldSocketId = socket.id;
-            const timer = setTimeout(() => {
-              pendingRemovals.delete(clientId);
-              const r = rooms.get(roomId);
-              if (r) {
-                const wasHost = r.creatorId === oldSocketId;
-                r.users.delete(oldSocketId);
-                if (r.users.size === 0) {
-                  rooms.delete(roomId);
-                } else {
-                  if (wasHost) {
-                    r.hostAbsentTimer = setTimeout(() => {
-                      r.hostAbsentTimer = null;
-                      io.to(roomId).emit('host-absent', { roomId });
-                    }, hostAbsentTimeoutMs);
-                  }
-                  emitRoomUpdate(roomId);
-                }
-              }
-            }, reconnectGracePeriodMs);
-            pendingRemovals.set(clientId, { timer, roomId, oldSocketId, userData });
-          } else {
-            const wasHost = room.creatorId === socket.id;
-            room.users.delete(socket.id);
-            if (room.users.size === 0) {
-              rooms.delete(roomId);
-            } else {
-              if (wasHost) {
-                room.hostAbsentTimer = setTimeout(() => {
-                  room.hostAbsentTimer = null;
-                  io.to(roomId).emit('host-absent', { roomId });
-                }, hostAbsentTimeoutMs);
-              }
-              emitRoomUpdate(roomId);
-            }
-          }
-        }
-      }
-    });
-
-    socket.on('claim-host', ({ roomId }) => {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      if (!room.users.has(socket.id)) return;
-      if (room.users.has(room.creatorId)) return;
-      if (room.hostAbsentTimer) {
-        clearTimeout(room.hostAbsentTimer);
-        room.hostAbsentTimer = null;
-      }
-      room.creatorId = socket.id;
-      emitRoomUpdate(roomId);
-    });
-    
-    function emitRoomUpdate(roomId) {
-      const room = rooms.get(roomId);
-      if (!room) return;
-      
-      const users = Array.from(room.users.entries()).map(([socketId, user]) => ({
-        id: socketId,
-        name: user.name,
-        vote: room.revealed ? user.vote : (user.vote !== null ? 'voted' : null),
-        isObserver: user.isObserver
-      }));
-      
-      let stats = null;
-      if (room.revealed) {
-        const votes = Array.from(room.users.values())
-          .filter(u => !u.isObserver && u.vote !== null && typeof u.vote === 'number')
-          .map(u => u.vote);
-        
-        if (votes.length > 0) {
-          const sum = votes.reduce((a, b) => a + b, 0);
-          const avg = sum / votes.length;
-          const sorted = [...votes].sort((a, b) => a - b);
-          const median = votes.length % 2 === 0
-            ? (sorted[votes.length / 2 - 1] + sorted[votes.length / 2]) / 2
-            : sorted[Math.floor(votes.length / 2)];
-          
-          stats = {
-            average: Math.round(avg * 10) / 10,
-            median: median,
-            min: Math.min(...votes),
-            max: Math.max(...votes)
-          };
-        }
-      }
-      
-      io.to(roomId).emit('room-update', {
-        roomId,
-        users,
-        revealed: room.revealed,
-        stats,
-        creatorId: room.creatorId,
-        cardSet: room.cardSet,
-        storyTitle: room.storyTitle,
-        autoReveal: room.autoReveal,
-        specialEffects: room.specialEffects
-      });
-    }
-  });
-  
-  return { app, server, io, rooms, pendingRemovals };
-}
 
 describe('Server Health Checks', () => {
   let testServer;
@@ -323,7 +12,7 @@ describe('Server Health Checks', () => {
   let io;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     server.listen(() => {
@@ -357,7 +46,7 @@ describe('Socket.IO Room Management', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     
@@ -500,7 +189,7 @@ describe('Socket.IO Voting', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     
@@ -625,7 +314,7 @@ describe('Socket.IO Reveal and Statistics', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     
@@ -769,7 +458,7 @@ describe('Socket.IO Reset', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     
@@ -842,7 +531,7 @@ describe('Room Cleanup', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -923,7 +612,7 @@ describe('Reconnection after page refresh', () => {
   let serverUrl;
 
   beforeEach((done) => {
-    testServer = createTestServer({ reconnectGracePeriodMs: GRACE_MS });
+    testServer = createServer({ reconnectGracePeriodMs: GRACE_MS, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -1065,7 +754,7 @@ describe('Remove Participant', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -1228,7 +917,7 @@ describe('Reveal and Reset Authorization', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -1456,7 +1145,7 @@ describe('Multi-User Room Capacity', () => {
   let serverUrl;
   
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -1609,7 +1298,7 @@ describe('Card Set', () => {
   let serverUrl;
 
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -1711,7 +1400,7 @@ describe('Story Title', () => {
   let serverUrl;
 
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -1844,7 +1533,7 @@ describe('Auto-Reveal', () => {
   let serverUrl;
 
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -2056,7 +1745,7 @@ describe('Host Takeover', () => {
   let serverUrl;
 
   beforeEach((done) => {
-    testServer = createTestServer({ hostAbsentTimeoutMs: HOST_ABSENT_MS });
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: HOST_ABSENT_MS });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -2241,7 +1930,7 @@ describe('Stress Test', () => {
   let serverUrl;
 
   beforeEach((done) => {
-    testServer = createTestServer();
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
     server = testServer.server;
     io = testServer.io;
     rooms = testServer.rooms;
@@ -2361,4 +2050,871 @@ describe('Stress Test', () => {
     // Disconnect all 240 clients
     allClients.forEach(c => c.disconnect());
   }, 60000);
+});
+
+describe('Room Cleanup Interval', () => {
+  test('deletes empty rooms older than 24 hours when interval fires', () => {
+    jest.useFakeTimers();
+    const { rooms, cleanupInterval, io, server } = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
+
+    const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000); // 25 hours ago
+    const recentDate = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hour ago
+
+    // Old empty room – should be cleaned up
+    rooms.set('OLD_EMPTY', { id: 'OLD_EMPTY', users: new Map(), revealed: false, createdAt: oldDate, creatorId: null, cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null });
+    // Recent empty room – should not be cleaned up
+    rooms.set('NEW_EMPTY', { id: 'NEW_EMPTY', users: new Map(), revealed: false, createdAt: recentDate, creatorId: null, cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null });
+    // Old room with users – should not be cleaned up
+    const usersMap = new Map([['sock1', { name: 'Alice', vote: null, isObserver: false }]]);
+    rooms.set('OLD_ACTIVE', { id: 'OLD_ACTIVE', users: usersMap, revealed: false, createdAt: oldDate, creatorId: 'sock1', cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null });
+
+    jest.advanceTimersByTime(60 * 60 * 1000); // advance 1 hour to fire the cleanup interval
+
+    expect(rooms.has('OLD_EMPTY')).toBe(false);
+    expect(rooms.has('NEW_EMPTY')).toBe(true);
+    expect(rooms.has('OLD_ACTIVE')).toBe(true);
+
+    clearInterval(cleanupInterval);
+    jest.useRealTimers();
+    io.close();
+    server.close();
+  });
+});
+
+describe('Reconnection edge cases', () => {
+  const GRACE_MS = 300;
+  const HOST_ABSENT_MS = 5000;
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let pendingRemovals;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: GRACE_MS, hostAbsentTimeoutMs: HOST_ABSENT_MS });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    pendingRemovals = testServer.pendingRemovals;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('reconnecting host during grace period restores creator role', (done) => {
+    // Covers lines 93-94: room.creatorId is updated to new socket when host reconnects
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        host.disconnect();
+
+        setTimeout(() => {
+          const host2 = Client(serverUrl);
+          host2.once('room-update', (data) => {
+            expect(data.creatorId).toBe(host2.id);
+            host2.disconnect();
+            participant.disconnect();
+            done();
+          });
+          host2.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Host', isObserver: false, clientId: 'host-role-cid' });
+        }, 30);
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    host.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Host', isObserver: false, clientId: 'host-role-cid' });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Participant', isObserver: false });
+    }, 20);
+  }, 5000);
+
+  test('reconnecting to a different room cancels old grace period and removes from old room', (done) => {
+    // Covers lines 109-120: user reconnects to a different room while in grace period
+    const client1 = Client(serverUrl);
+    const client2 = Client(serverUrl);
+
+    // Join room A with client1
+    client1.on('connect', () => {
+      client1.emit('join-room', { roomId: 'DIFFROOM_A', userName: 'Alice', isObserver: false, clientId: 'diff-cid' });
+    });
+
+    client1.once('room-update', () => {
+      // client2 joins room A as another user (so room A won't be empty after alice leaves)
+      client2.emit('join-room', { roomId: 'DIFFROOM_A', userName: 'Bob', isObserver: false });
+      client2.once('room-update', () => {
+        // Alice disconnects - grace period starts
+        client1.disconnect();
+
+        setTimeout(() => {
+          // Alice reconnects to room B while still in grace period for room A
+          const client1b = Client(serverUrl);
+          client1b.once('room-update', (data) => {
+            // Alice should be in room B, not room A
+            expect(data.roomId).toBe('DIFFROOM_B');
+            expect(rooms.has('DIFFROOM_A')).toBe(true); // room A still exists with Bob
+            expect(rooms.has('DIFFROOM_B')).toBe(true);
+            const roomA = rooms.get('DIFFROOM_A');
+            const roomB = rooms.get('DIFFROOM_B');
+            // Alice should not be in room A anymore
+            const aliceInA = Array.from(roomA.users.values()).find(u => u.name === 'Alice');
+            expect(aliceInA).toBeUndefined();
+            expect(roomB.users.size).toBe(1);
+
+            client1b.disconnect();
+            client2.disconnect();
+            done();
+          });
+          client1b.emit('join-room', { roomId: 'DIFFROOM_B', userName: 'Alice', isObserver: false, clientId: 'diff-cid' });
+        }, 50);
+      });
+    });
+  }, 10000);
+
+  test('reconnecting to a different room deletes old empty room', (done) => {
+    // Covers the sub-case where old room becomes empty after removal (lines 113-115)
+    const client1 = Client(serverUrl);
+
+    // Join room A with ONLY client1 (so room A becomes empty when Alice leaves)
+    client1.on('connect', () => {
+      client1.emit('join-room', { roomId: 'DIFFROOM_EMPTY_A', userName: 'Alice', isObserver: false, clientId: 'diff-empty-cid' });
+    });
+
+    client1.once('room-update', () => {
+      // Alice is alone. Disconnect her – grace period starts
+      client1.disconnect();
+
+      setTimeout(() => {
+        // Alice reconnects to room B while still in grace period for room A
+        const client1b = Client(serverUrl);
+        client1b.once('room-update', () => {
+          // Room A should be deleted since it was empty
+          expect(rooms.has('DIFFROOM_EMPTY_A')).toBe(false);
+          expect(rooms.has('DIFFROOM_EMPTY_B')).toBe(true);
+
+          client1b.disconnect();
+          done();
+        });
+        client1b.emit('join-room', { roomId: 'DIFFROOM_EMPTY_B', userName: 'Alice', isObserver: false, clientId: 'diff-empty-cid' });
+      }, 50);
+    });
+  }, 10000);
+
+  test('host grace period expiry with other users starts hostAbsentTimer', (done) => {
+    // Covers lines 337-344: host disconnects with clientId, grace expires, hostAbsentTimer starts
+    const FAST_GRACE = 100;
+    const ts2 = createServer({ reconnectGracePeriodMs: FAST_GRACE, hostAbsentTimeoutMs: 50 });
+    const localServer = ts2.server;
+    const localIo = ts2.io;
+    const localRooms = ts2.rooms;
+
+    localServer.listen(() => {
+      const port = localServer.address().port;
+      const localUrl = `http://localhost:${port}`;
+
+      const host = Client(localUrl);
+      const participant = Client(localUrl);
+      let joinCount = 0;
+
+      const handleJoin = () => {
+        joinCount++;
+        if (joinCount === 2) {
+          host.disconnect();
+        }
+      };
+
+      host.on('room-update', handleJoin);
+      participant.on('room-update', handleJoin);
+
+      participant.on('host-absent', () => {
+        // host-absent fired means hostAbsentTimer ran – lines 337-344 were hit
+        participant.disconnect();
+        localIo.close();
+        localServer.close(done);
+      });
+
+      host.emit('join-room', { roomId: 'HOST_GRACE_ABSENT', userName: 'Host', isObserver: false, clientId: 'host-grace-cid' });
+      setTimeout(() => {
+        participant.emit('join-room', { roomId: 'HOST_GRACE_ABSENT', userName: 'Participant', isObserver: false });
+      }, 20);
+    });
+  }, 10000);
+});
+
+describe('Remove participant with pending reconnect', () => {
+  const GRACE_MS = 500;
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let pendingRemovals;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: GRACE_MS, hostAbsentTimeoutMs: 0 });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    pendingRemovals = testServer.pendingRemovals;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('removes a participant who is in the reconnect grace period', (done) => {
+    // Covers lines 295-298: pendingRemovals entry cancelled on remove-participant
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+    let participantId = null;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        participantId = participant.id;
+        // Participant disconnects – grace period starts, adding to pendingRemovals
+        participant.disconnect();
+
+        setTimeout(() => {
+          // While participant is in grace period, host removes them
+          expect(pendingRemovals.size).toBe(1);
+          host.once('room-update', () => {
+            // Pending removal should be cancelled
+            expect(pendingRemovals.size).toBe(0);
+            const room = rooms.get('REMOVE_PENDING_ROOM');
+            expect(room).toBeDefined();
+            const names = Array.from(room.users.values()).map(u => u.name);
+            expect(names).not.toContain('Participant');
+            host.disconnect();
+            done();
+          });
+          host.emit('remove-participant', { roomId: 'REMOVE_PENDING_ROOM', participantId });
+        }, 50);
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    host.emit('join-room', { roomId: 'REMOVE_PENDING_ROOM', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'REMOVE_PENDING_ROOM', userName: 'Participant', isObserver: false, clientId: 'pending-cid' });
+    }, 30);
+  }, 10000);
+});
+
+describe('Claim host clears hostAbsentTimer', () => {
+  const HOST_ABSENT_MS = 200;
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: HOST_ABSENT_MS });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('claiming host before host-absent fires cancels the timer', (done) => {
+    // Covers lines 261-262: clearTimeout(room.hostAbsentTimer) in claim-host
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Host disconnects immediately (no clientId → immediate removal)
+        host.disconnect();
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    host.on('disconnect', () => {
+      // Immediately after host disconnects, check that hostAbsentTimer is set and claim host
+      setTimeout(() => {
+        const room = rooms.get('CLAIM_CANCEL_ROOM');
+        if (!room) return done.fail('Room not found');
+        // hostAbsentTimer should be set (but not yet fired)
+        expect(room.hostAbsentTimer).not.toBeNull();
+        participant.once('room-update', (data) => {
+          // Participant is now host, timer should be cleared
+          expect(data.creatorId).toBe(participant.id);
+          const roomAfter = rooms.get('CLAIM_CANCEL_ROOM');
+          expect(roomAfter.hostAbsentTimer).toBeNull();
+          participant.disconnect();
+          done();
+        });
+        participant.emit('claim-host', { roomId: 'CLAIM_CANCEL_ROOM' });
+      }, 10); // Small delay to let server process the disconnect
+    });
+
+    host.emit('join-room', { roomId: 'CLAIM_CANCEL_ROOM', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant.emit('join-room', { roomId: 'CLAIM_CANCEL_ROOM', userName: 'Participant', isObserver: false });
+    }, 30);
+  }, 10000);
+});
+
+describe('Guard conditions and default values', () => {
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: 0, hostAbsentTimeoutMs: 0 });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    server.listen(() => {
+      serverUrl = `http://localhost:${server.address().port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('createServer uses env var defaults when no args provided', () => {
+    process.env.RECONNECT_GRACE_PERIOD_MS = '1234';
+    process.env.HOST_TAKEOVER_TIMEOUT_MS = '5678';
+    const ts = createServer();
+    expect(ts.server).toBeDefined();
+    ts.io.close();
+    ts.server.close();
+    clearInterval(ts.cleanupInterval);
+    delete process.env.RECONNECT_GRACE_PERIOD_MS;
+    delete process.env.HOST_TAKEOVER_TIMEOUT_MS;
+  });
+
+  test('createServer uses hardcoded defaults when env vars are absent', () => {
+    delete process.env.RECONNECT_GRACE_PERIOD_MS;
+    delete process.env.HOST_TAKEOVER_TIMEOUT_MS;
+    const ts = createServer();
+    expect(ts.server).toBeDefined();
+    ts.io.close();
+    ts.server.close();
+    clearInterval(ts.cleanupInterval);
+  });
+
+  test('join room without userName falls back to generated name', (done) => {
+    const client = Client(serverUrl);
+    client.on('room-update', (data) => {
+      const user = data.users.find(u => u.name.startsWith('User '));
+      expect(user).toBeDefined();
+      client.disconnect();
+      done();
+    });
+    // Deliberately omit userName
+    client.emit('join-room', { roomId: 'NONAME_ROOM', isObserver: false });
+  });
+
+  test('vote event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      // Emit vote for a room that doesn't exist – should not throw
+      client.emit('vote', { roomId: 'NONEXISTENT_ROOM', vote: 5 });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_ROOM')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('reveal event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      client.emit('reveal', { roomId: 'NONEXISTENT_REVEAL' });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_REVEAL')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('reset event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      client.emit('reset', { roomId: 'NONEXISTENT_RESET' });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_RESET')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('set-story event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      client.emit('set-story', { roomId: 'NONEXISTENT_STORY', storyTitle: 'Test' });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_STORY')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('toggle-auto-reveal event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      client.emit('toggle-auto-reveal', { roomId: 'NONEXISTENT_AR', autoReveal: true });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_AR')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('claim-host event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      client.emit('claim-host', { roomId: 'NONEXISTENT_CLAIM' });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_CLAIM')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('remove-participant event on non-existent room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      client.emit('remove-participant', { roomId: 'NONEXISTENT_REMOVE', participantId: 'fake' });
+      setTimeout(() => {
+        expect(rooms.has('NONEXISTENT_REMOVE')).toBe(false);
+        client.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('vote event when user is not in room is silently ignored', (done) => {
+    const client = Client(serverUrl);
+    const joiner = Client(serverUrl);
+
+    joiner.on('connect', () => {
+      joiner.emit('join-room', { roomId: 'VOTE_NOUSER_ROOM', userName: 'Joiner' });
+    });
+
+    joiner.once('room-update', () => {
+      // client sends vote without joining the room first
+      client.emit('vote', { roomId: 'VOTE_NOUSER_ROOM', vote: 5 });
+      setTimeout(() => {
+        const room = rooms.get('VOTE_NOUSER_ROOM');
+        expect(room).toBeDefined();
+        const votes = Array.from(room.users.values()).map(u => u.vote);
+        expect(votes.every(v => v === null)).toBe(true);
+        client.disconnect();
+        joiner.disconnect();
+        done();
+      }, 100);
+    });
+  });
+
+  test('remove-participant with non-existent participantId is silently ignored', (done) => {
+    const host = Client(serverUrl);
+    host.on('room-update', () => {
+      host.emit('remove-participant', { roomId: 'REMOVE_NONEXIST_PART', participantId: 'fake-socket-id' });
+      setTimeout(() => {
+        const room = rooms.get('REMOVE_NONEXIST_PART');
+        expect(room.users.size).toBe(1);
+        host.disconnect();
+        done();
+      }, 100);
+    });
+    host.emit('join-room', { roomId: 'REMOVE_NONEXIST_PART', userName: 'Host' });
+  });
+});
+
+describe('Reconnection with missing room', () => {
+  const GRACE_MS = 300;
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: GRACE_MS, hostAbsentTimeoutMs: 0 });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    server.listen(() => {
+      serverUrl = `http://localhost:${server.address().port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('reconnecting user to a room that was deleted during grace period joins fresh', (done) => {
+    // Covers the false branch of `if (room)` inside reconnection path
+    const client = Client(serverUrl);
+
+    client.once('room-update', () => {
+      client.disconnect();
+
+      // Wait for the server to process the disconnect and add the entry to pendingRemovals
+      // before deleting the room, so the reconnection path finds pendingRemovals entry but no room
+      setTimeout(() => {
+        rooms.delete('RECONNECT_DELETED');
+
+        setTimeout(() => {
+          const client2 = Client(serverUrl);
+          client2.once('room-update', (data) => {
+            // Should join as new user in a fresh room (fallthrough after room not found)
+            expect(data.roomId).toBe('RECONNECT_DELETED');
+            expect(data.users.length).toBe(1);
+            client2.disconnect();
+            done();
+          });
+          client2.emit('join-room', {
+            roomId: 'RECONNECT_DELETED',
+            userName: 'Alice',
+            isObserver: false,
+            clientId: 'reconnect-deleted-cid'
+          });
+        }, 20);
+      }, 50); // Give the server time to process the disconnect
+    });
+
+    client.emit('join-room', {
+      roomId: 'RECONNECT_DELETED',
+      userName: 'Alice',
+      isObserver: false,
+      clientId: 'reconnect-deleted-cid'
+    });
+  }, 5000);
+});
+
+describe('Branch coverage for remaining edge cases', () => {
+  const GRACE_MS = 300;
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let pendingRemovals;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: GRACE_MS, hostAbsentTimeoutMs: 60000 });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    pendingRemovals = testServer.pendingRemovals;
+    server.listen(() => {
+      serverUrl = `http://localhost:${server.address().port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('set-story with non-string storyTitle sets empty string', (done) => {
+    // Covers line 234: ternary false branch when storyTitle is not a string
+    const host = Client(serverUrl);
+    let updateCount = 0;
+    host.on('room-update', (data) => {
+      updateCount++;
+      if (updateCount === 1) {
+        // Send a non-string storyTitle (e.g., null) to trigger the ternary false branch
+        host.emit('set-story', { roomId: 'STORY_NONSTRING', storyTitle: null });
+      } else if (updateCount === 2) {
+        expect(data.storyTitle).toBe('');
+        host.disconnect();
+        done();
+      }
+    });
+    host.emit('join-room', { roomId: 'STORY_NONSTRING', userName: 'Host' });
+  });
+
+  test('non-host user grace period expiry with other users does not set hostAbsentTimer', (done) => {
+    // Covers line 338 false branch: non-host disconnects with clientId, grace period expires, wasHost = false
+    const host = Client(serverUrl);
+    const nonHost = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        nonHost.disconnect();
+
+        // Let the grace period expire
+        setTimeout(() => {
+          // Non-host grace period expired – room should still exist with only host
+          const room = rooms.get('NONHOST_GRACE_ROOM');
+          expect(room).toBeDefined();
+          expect(room.users.size).toBe(1); // Only host remaining
+          expect(room.hostAbsentTimer).toBeNull(); // No hostAbsentTimer set (wasHost = false)
+          host.disconnect();
+          done();
+        }, GRACE_MS + 50);
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    nonHost.on('room-update', handleJoin);
+
+    host.emit('join-room', { roomId: 'NONHOST_GRACE_ROOM', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      nonHost.emit('join-room', { roomId: 'NONHOST_GRACE_ROOM', userName: 'NonHost', isObserver: false, clientId: 'nonhost-grace-cid' });
+    }, 30);
+  }, 5000);
+
+  test('grace period fires after room was externally deleted leaves no artifacts', (done) => {
+    // Covers line 331 false branch: room is gone when grace period timer fires
+    const client = Client(serverUrl);
+
+    client.once('room-update', () => {
+      client.disconnect();
+
+      // Wait for server to process disconnect and add to pendingRemovals
+      setTimeout(() => {
+        // Externally delete the room (simulates cleanup or race condition)
+        rooms.delete('GRACE_DELETED_ROOM');
+
+        // Let the grace period fire naturally – it will find no room (line 331 false branch)
+        setTimeout(() => {
+          expect(rooms.has('GRACE_DELETED_ROOM')).toBe(false);
+          expect(pendingRemovals.has('grace-deleted-cid')).toBe(false); // cleaned up
+          done();
+        }, GRACE_MS + 50);
+      }, 50);
+    });
+
+    client.emit('join-room', {
+      roomId: 'GRACE_DELETED_ROOM',
+      userName: 'Alice',
+      isObserver: false,
+      clientId: 'grace-deleted-cid'
+    });
+  }, 5000);
+
+  test('remove-participant loops past non-matching pendingRemovals entries', (done) => {
+    // Covers line 296 false branch: loop iterates an entry that does NOT match participantId
+    const host = Client(serverUrl);
+    const participant1 = Client(serverUrl);
+    const participant2 = Client(serverUrl);
+    let participant1Id = null;
+    let participant2Id = null;
+    let allJoined = false;
+
+    // Wait for the room to have all 3 users before proceeding
+    const checkAllJoined = (data) => {
+      if (!allJoined && data.users && data.users.length === 3) {
+        allJoined = true;
+        participant1Id = participant1.id;
+        participant2Id = participant2.id;
+
+        // Disconnect both participants so they're both in pendingRemovals
+        participant1.disconnect();
+        participant2.disconnect();
+
+        setTimeout(() => {
+          // Both should be in pendingRemovals now
+          expect(pendingRemovals.size).toBe(2);
+
+          // Host removes participant2 (the second entry) – loop will encounter participant1 first (false branch)
+          host.once('room-update', () => {
+            expect(pendingRemovals.size).toBe(1); // participant2's entry was removed
+            const remaining = Array.from(pendingRemovals.values());
+            expect(remaining[0].oldSocketId).toBe(participant1Id); // participant1 still in pendingRemovals
+
+            // Cancel participant1's pending grace period timer to avoid post-test async logs
+            const p1Entry = pendingRemovals.get('pending-cid-1');
+            if (p1Entry) {
+              clearTimeout(p1Entry.timer);
+              pendingRemovals.delete('pending-cid-1');
+              rooms.get('MULTI_PENDING_ROOM')?.users.delete(participant1Id);
+            }
+
+            host.disconnect();
+            done();
+          });
+          host.emit('remove-participant', { roomId: 'MULTI_PENDING_ROOM', participantId: participant2Id });
+        }, 50);
+      }
+    };
+
+    host.on('room-update', checkAllJoined);
+
+    host.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      participant1.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'P1', isObserver: false, clientId: 'pending-cid-1' });
+    }, 20);
+    setTimeout(() => {
+      participant2.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'P2', isObserver: false, clientId: 'pending-cid-2' });
+    }, 40);
+  }, 10000);
+});
+
+describe('Final branch coverage', () => {
+  const GRACE_MS = 300;
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({ reconnectGracePeriodMs: GRACE_MS, hostAbsentTimeoutMs: 0 });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+    server.listen(() => {
+      serverUrl = `http://localhost:${server.address().port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('non-host reconnect within grace period preserves non-host role', (done) => {
+    // Covers line 93 false branch: room.creatorId !== pending.oldSocketId (reconnecting user is not host)
+    const host = Client(serverUrl);
+    const nonHost = Client(serverUrl);
+    let joinCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Non-host disconnects
+        nonHost.disconnect();
+
+        // Reconnect non-host within grace period
+        setTimeout(() => {
+          const nonHost2 = Client(serverUrl);
+          nonHost2.once('room-update', (data) => {
+            // Host should still be the creator
+            expect(data.creatorId).toBe(host.id);
+            // Non-host's vote/name should be preserved
+            const nonHostUser = data.users.find(u => u.name === 'NonHost');
+            expect(nonHostUser).toBeDefined();
+            nonHost2.disconnect();
+            host.disconnect();
+            done();
+          });
+          nonHost2.emit('join-room', { roomId: 'NONHOST_RECONNECT', userName: 'NonHost', isObserver: false, clientId: 'nonhost-reconnect-cid' });
+        }, 30);
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    nonHost.on('room-update', handleJoin);
+
+    host.emit('join-room', { roomId: 'NONHOST_RECONNECT', userName: 'Host', isObserver: false });
+    setTimeout(() => {
+      nonHost.emit('join-room', { roomId: 'NONHOST_RECONNECT', userName: 'NonHost', isObserver: false, clientId: 'nonhost-reconnect-cid' });
+    }, 20);
+  }, 5000);
+
+  test('socket disconnect without joining a room is handled gracefully', (done) => {
+    // Covers line 322 false branch: socket.roomId is null/undefined on disconnect
+    const client = Client(serverUrl);
+    client.on('connect', () => {
+      // Disconnect immediately without joining any room
+      client.disconnect();
+      // If we get here without error, the test passes
+      setTimeout(() => {
+        expect(rooms.size).toBe(0);
+        done();
+      }, 100);
+    });
+  });
+
+  test('reconnecting to different room when old room was already deleted', (done) => {
+    // Covers line 112 false branch: oldRoom is null when reconnecting to a different room
+    const client = Client(serverUrl);
+
+    client.once('room-update', () => {
+      client.disconnect();
+
+      // Wait for server to process disconnect (adds to pendingRemovals)
+      setTimeout(() => {
+        // Delete the old room externally
+        rooms.delete('CROSS_DELETED_A');
+
+        // Now reconnect to a different room – the else branch in join-room runs,
+        // tries rooms.get('CROSS_DELETED_A') → null → if (oldRoom) is FALSE (line 112)
+        const client2 = Client(serverUrl);
+        client2.once('room-update', (data) => {
+          expect(data.roomId).toBe('CROSS_DELETED_B');
+          expect(rooms.has('CROSS_DELETED_A')).toBe(false);
+          expect(rooms.has('CROSS_DELETED_B')).toBe(true);
+          client2.disconnect();
+          done();
+        });
+        client2.emit('join-room', {
+          roomId: 'CROSS_DELETED_B',
+          userName: 'Alice',
+          isObserver: false,
+          clientId: 'cross-deleted-cid'
+        });
+      }, 50);
+    });
+
+    client.emit('join-room', {
+      roomId: 'CROSS_DELETED_A',
+      userName: 'Alice',
+      isObserver: false,
+      clientId: 'cross-deleted-cid'
+    });
+  }, 5000);
 });

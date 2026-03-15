@@ -10,6 +10,14 @@ module.exports = {
     '!jest.config.js'
   ],
   coverageReporters: ['text', 'lcov', 'html'],
+  coverageThreshold: {
+    global: {
+      statements: 100,
+      branches: 100,
+      functions: 100,
+      lines: 100
+    }
+  },
   testTimeout: 10000,
   verbose: true
 };

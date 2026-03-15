@@ -1,5 +1,8 @@
 # Scrum Poker App
 
+[![CI](https://github.com/agornovo/scrumpoker/actions/workflows/ci.yml/badge.svg)](https://github.com/agornovo/scrumpoker/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/agornovo/scrumpoker/graph/badge.svg)](https://codecov.io/gh/agornovo/scrumpoker)
+
 A real-time networked scrum poker application for agile teams to estimate user stories collaboratively.
 
 ## Screenshots
@@ -123,6 +126,8 @@ npm run test:e2e:headed
 
 ### Test Coverage
 
+Unit tests achieve **100% code coverage** (statements, branches, functions, and lines) enforced via Jest thresholds. Coverage is reported to [Codecov](https://codecov.io/gh/agornovo/scrumpoker) on every CI run, and a coverage diff comment is posted to each pull request automatically.
+
 Unit tests cover:
 - Health check endpoints
 - Room management (create, join, cleanup)
@@ -151,8 +156,9 @@ E2E tests cover:
 The project uses GitHub Actions for CI/CD. Two parallel jobs run on every push and pull request:
 
 **`test` job** (Node.js matrix: 18.x, 20.x, 24.x)
-- Unit tests with coverage reporting
+- Unit tests with 100% code coverage (statements, branches, functions, and lines) enforced via Jest thresholds
 - E2E tests with Playwright against `node server.js`
+- Coverage report uploaded to [Codecov](https://codecov.io/gh/agornovo/scrumpoker) on every push and pull request (Node 20.x run), showing a coverage badge and a per-PR diff comment
 
 **`docker-e2e` job**
 - Builds the production Docker image

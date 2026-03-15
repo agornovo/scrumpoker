@@ -1,0 +1,17 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 100%
+        threshold: 0%
+    patch:
+      default:
+        target: 100%
+        threshold: 0%
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
