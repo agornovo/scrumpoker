@@ -2227,3 +2227,138 @@ describe('Host Takeover', () => {
     }, 50);
   }, 5000);
 });
+
+describe('Stress Test', () => {
+  const ROOMS = 30;
+  const VOTERS_PER_ROOM = 8;
+  // One distinct numeric vote per voter slot; matches server's standard card set
+  const VOTE_VALUES = [1, 2, 3, 5, 8, 13, 20, 40];
+
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createTestServer();
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      const port = server.address().port;
+      serverUrl = `http://localhost:${port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('should handle 30 rooms with 8 voters each completing a full voting round', async () => {
+    const allClients = [];
+
+    async function runRoom(r) {
+      const roomId = `STRESS_R${String(r).padStart(2, '0')}`;
+      const clients = [];
+
+      // Step 1: Connect all 8 voters and wait for their first room-update (join confirmation)
+      await Promise.all(
+        Array.from({ length: VOTERS_PER_ROOM }, (_, v) =>
+          new Promise((resolve) => {
+            const client = Client(serverUrl);
+            clients.push(client);
+            allClients.push(client);
+            client.on('connect', () => {
+              client.emit('join-room', {
+                roomId,
+                userName: `R${r}V${v}`,
+                isObserver: false,
+              });
+              client.once('room-update', resolve);
+            });
+          })
+        )
+      );
+
+      // Step 2: Poll the server-side rooms map until all 8 users are registered
+      await new Promise((resolve) => {
+        const poll = () => {
+          const room = rooms.get(roomId);
+          if (room && room.users.size === VOTERS_PER_ROOM) return resolve();
+          setTimeout(poll, 10);
+        };
+        poll();
+      });
+
+      // Step 3: Every voter casts a distinct numeric vote
+      clients.forEach((client, v) => {
+        client.emit('vote', { roomId, vote: VOTE_VALUES[v] });
+      });
+
+      // Step 4: Poll until all votes are recorded server-side
+      await new Promise((resolve) => {
+        const poll = () => {
+          const room = rooms.get(roomId);
+          if (room) {
+            const voters = Array.from(room.users.values()).filter(u => !u.isObserver);
+            if (voters.length === VOTERS_PER_ROOM && voters.every(u => u.vote !== null)) {
+              return resolve();
+            }
+          }
+          setTimeout(poll, 10);
+        };
+        poll();
+      });
+
+      // Step 5: Host reveals and we wait for the confirmed reveal update
+      const room = rooms.get(roomId);
+      const hostClient = clients.find(c => c.id === room.creatorId) || clients[0];
+      return new Promise((resolve) => {
+        const onUpdate = (data) => {
+          if (data.revealed && data.stats) {
+            hostClient.off('room-update', onUpdate);
+            resolve(data);
+          }
+        };
+        hostClient.on('room-update', onUpdate);
+        hostClient.emit('reveal', { roomId });
+      });
+    }
+
+    // Run all 30 rooms concurrently
+    const results = await Promise.all(
+      Array.from({ length: ROOMS }, (_, r) => runRoom(r))
+    );
+
+    // Pre-compute expected statistics for the known vote set
+    const voteSum = VOTE_VALUES.reduce((a, b) => a + b, 0);
+    const expectedAvg = Math.round((voteSum / VOTERS_PER_ROOM) * 10) / 10;
+    const expectedMin = VOTE_VALUES[0];
+    const expectedMax = VOTE_VALUES[VOTERS_PER_ROOM - 1];
+
+    expect(results).toHaveLength(ROOMS);
+    results.forEach((data) => {
+      expect(data.revealed).toBe(true);
+      expect(data.stats).not.toBeNull();
+      expect(data.stats.min).toBe(expectedMin);
+      expect(data.stats.max).toBe(expectedMax);
+      expect(data.stats.average).toBe(expectedAvg);
+    });
+
+    // Verify server-side state for every room
+    for (let r = 0; r < ROOMS; r++) {
+      const roomId = `STRESS_R${String(r).padStart(2, '0')}`;
+      const room = rooms.get(roomId);
+      expect(room).toBeDefined();
+      expect(room.users.size).toBe(VOTERS_PER_ROOM);
+      expect(room.revealed).toBe(true);
+    }
+
+    // Disconnect all 240 clients
+    allClients.forEach(c => c.disconnect());
+  }, 60000);
+});
