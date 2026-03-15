@@ -92,11 +92,6 @@ function createServer({
             // Update creatorId if the reconnecting user was the room creator
             if (room.creatorId === pending.oldSocketId) {
               room.creatorId = socket.id;
-              /* istanbul ignore next: hostAbsentTimer cannot be set while clientId is still in pendingRemovals */
-              if (room.hostAbsentTimer) {
-                clearTimeout(room.hostAbsentTimer);
-                room.hostAbsentTimer = null;
-              }
             }
 
             socket.join(roomId);
@@ -319,53 +314,50 @@ function createServer({
       const roomId = socket.roomId;
       if (roomId) {
         const room = rooms.get(roomId);
-        /* istanbul ignore next: room or user entry may not exist if state was already cleaned up */
-        if (room && room.users.has(socket.id)) {
-          const clientId = socket.clientId;
-          if (clientId) {
-            // Start a grace period to allow reconnection (e.g. page refresh)
-            const userData = { ...room.users.get(socket.id) };
-            const oldSocketId = socket.id;
-            const timer = setTimeout(() => {
-              pendingRemovals.delete(clientId);
-              const r = rooms.get(roomId);
-              if (r) {
-                const wasHost = r.creatorId === oldSocketId;
-                r.users.delete(oldSocketId);
-                if (r.users.size === 0) {
-                  rooms.delete(roomId);
-                  log('Deleted empty room:', roomId);
-                } else {
-                  if (wasHost) {
-                    r.hostAbsentTimer = setTimeout(() => {
-                      r.hostAbsentTimer = null;
-                      log(`Host absent in room ${roomId}, notifying participants`);
-                      io.to(roomId).emit('host-absent', { roomId });
-                    }, hostAbsentTimeoutMs);
-                  }
-                  emitRoomUpdate(roomId);
+        const clientId = socket.clientId;
+        if (clientId) {
+          // Start a grace period to allow reconnection (e.g. page refresh)
+          const userData = { ...room.users.get(socket.id) };
+          const oldSocketId = socket.id;
+          const timer = setTimeout(() => {
+            pendingRemovals.delete(clientId);
+            const r = rooms.get(roomId);
+            if (r) {
+              const wasHost = r.creatorId === oldSocketId;
+              r.users.delete(oldSocketId);
+              if (r.users.size === 0) {
+                rooms.delete(roomId);
+                log('Deleted empty room:', roomId);
+              } else {
+                if (wasHost) {
+                  r.hostAbsentTimer = setTimeout(() => {
+                    r.hostAbsentTimer = null;
+                    log(`Host absent in room ${roomId}, notifying participants`);
+                    io.to(roomId).emit('host-absent', { roomId });
+                  }, hostAbsentTimeoutMs);
                 }
+                emitRoomUpdate(roomId);
               }
-            }, reconnectGracePeriodMs);
-            pendingRemovals.set(clientId, { timer, roomId, oldSocketId, userData });
-            log(`User ${userData.name} disconnected from room ${roomId}, grace period started`);
-          } else {
-            // No clientId – remove the user immediately (legacy / non-browser clients)
-            const wasHost = room.creatorId === socket.id;
-            room.users.delete(socket.id);
-            if (room.users.size === 0) {
-              rooms.delete(roomId);
-              log('Deleted empty room:', roomId);
-            } else {
-              if (wasHost) {
-                room.hostAbsentTimer = setTimeout(() => {
-                  room.hostAbsentTimer = null;
-                  log(`Host absent in room ${roomId}, notifying participants`);
-                  io.to(roomId).emit('host-absent', { roomId });
-                }, hostAbsentTimeoutMs);
-              }
-              emitRoomUpdate(roomId);
             }
+          }, reconnectGracePeriodMs);
+          pendingRemovals.set(clientId, { timer, roomId, oldSocketId, userData });
+          log(`User ${userData.name} disconnected from room ${roomId}, grace period started`);
+        } else {
+          // No clientId – remove the user immediately (legacy / non-browser clients)
+          const wasHost = room.creatorId === socket.id;
+          room.users.delete(socket.id);
+          if (room.users.size === 0) {
+            rooms.delete(roomId);
+            log('Deleted empty room:', roomId);
+          } else {
+            if (wasHost) {
+              room.hostAbsentTimer = setTimeout(() => {
+                room.hostAbsentTimer = null;
+                log(`Host absent in room ${roomId}, notifying participants`);
+                io.to(roomId).emit('host-absent', { roomId });
+              }, hostAbsentTimeoutMs);
+            }
+            emitRoomUpdate(roomId);
           }
         }
       }
@@ -373,8 +365,6 @@ function createServer({
 
     function emitRoomUpdate(roomId) {
       const room = rooms.get(roomId);
-      /* istanbul ignore next: defensive guard, room cannot be deleted between event handler and emitRoomUpdate in single-threaded Node.js */
-      if (!room) return;
 
       const users = Array.from(room.users.entries()).map(([socketId, user]) => ({
         id: socketId,
