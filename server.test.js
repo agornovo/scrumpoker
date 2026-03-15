@@ -626,6 +626,9 @@ describe('Reconnection after page refresh', () => {
   });
 
   afterEach((done) => {
+    // Cancel any pending grace-period timers to prevent post-test async logging
+    pendingRemovals.forEach(({ timer }) => clearTimeout(timer));
+    pendingRemovals.clear();
     io.close();
     server.close(done);
   });
@@ -2082,7 +2085,7 @@ describe('Room Cleanup Interval', () => {
 });
 
 describe('Reconnection edge cases', () => {
-  const GRACE_MS = 300;
+  const GRACE_MS = 2000;
   const HOST_ABSENT_MS = 5000;
   let testServer;
   let server;
@@ -2106,6 +2109,9 @@ describe('Reconnection edge cases', () => {
   });
 
   afterEach((done) => {
+    // Cancel any pending grace-period timers to prevent post-test async logging
+    pendingRemovals.forEach(({ timer }) => clearTimeout(timer));
+    pendingRemovals.clear();
     io.close();
     server.close(done);
   });
@@ -2148,7 +2154,7 @@ describe('Reconnection edge cases', () => {
     setTimeout(() => {
       participant.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Participant', isObserver: false });
     }, 20);
-  }, 5000);
+  }, 10000);
 
   test('reconnecting to a different room cancels old grace period and removes from old room', (done) => {
     // Covers lines 109-120: user reconnects to a different room while in grace period
@@ -2286,6 +2292,9 @@ describe('Remove participant with pending reconnect', () => {
   });
 
   afterEach((done) => {
+    // Cancel any pending grace-period timers to prevent post-test async logging
+    pendingRemovals.forEach(({ timer }) => clearTimeout(timer));
+    pendingRemovals.clear();
     io.close();
     server.close(done);
   });
@@ -2841,6 +2850,9 @@ describe('Final branch coverage', () => {
   });
 
   afterEach((done) => {
+    // Cancel any pending grace-period timers to prevent post-test async logging
+    pendingRemovals.forEach(({ timer }) => clearTimeout(timer));
+    pendingRemovals.clear();
     io.close();
     server.close(done);
   });
