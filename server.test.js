@@ -2151,9 +2151,11 @@ describe('Reconnection edge cases', () => {
     });
 
     host.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Host', isObserver: false, clientId: 'host-role-cid' });
-    setTimeout(() => {
+    // Wait for host's room-update (confirms host joined and is creator) before participant joins.
+    // Using a fixed setTimeout is unreliable on slow CI where the handshake may take >20 ms.
+    host.once('room-update', () => {
       participant.emit('join-room', { roomId: 'RECONNECT_HOST_ROLE', userName: 'Participant', isObserver: false });
-    }, 20);
+    });
   }, 10000);
 
   test('reconnecting to a different room cancels old grace period and removes from old room', (done) => {
@@ -2261,9 +2263,10 @@ describe('Reconnection edge cases', () => {
       });
 
       host.emit('join-room', { roomId: 'HOST_GRACE_ABSENT', userName: 'Host', isObserver: false, clientId: 'host-grace-cid' });
-      setTimeout(() => {
+      // Wait for host's room-update (confirms host joined and is creator) before participant joins.
+      host.once('room-update', () => {
         participant.emit('join-room', { roomId: 'HOST_GRACE_ABSENT', userName: 'Participant', isObserver: false });
-      }, 20);
+      });
     });
   }, 10000);
 });
@@ -2786,45 +2789,61 @@ describe('Branch coverage for remaining edge cases', () => {
         participant1Id = participant1.id;
         participant2Id = participant2.id;
 
-        // Disconnect both participants so they're both in pendingRemovals
+        // Disconnect participant1 first and wait for its pendingRemovals entry to appear before
+        // disconnecting participant2.  This guarantees the Map insertion order (participant1 first,
+        // participant2 second) so the remove-participant loop will encounter the non-matching entry
+        // (participant1) before the matching one (participant2) – covering the false branch.
         participant1.disconnect();
-        participant2.disconnect();
+        const waitForP1 = () => {
+          if (pendingRemovals.has('pending-cid-1')) {
+            participant2.disconnect();
+            // Poll until both entries are registered, then proceed without relying on a fixed delay.
+            const waitForBoth = () => {
+              if (pendingRemovals.size === 2) {
+                expect(pendingRemovals.size).toBe(2);
 
-        setTimeout(() => {
-          // Both should be in pendingRemovals now
-          expect(pendingRemovals.size).toBe(2);
+                // Host removes participant2 (the second entry) – loop encounters participant1 first (false branch)
+                host.once('room-update', () => {
+                  expect(pendingRemovals.size).toBe(1); // participant2's entry was removed
+                  const remaining = Array.from(pendingRemovals.values());
+                  expect(remaining[0].oldSocketId).toBe(participant1Id); // participant1 still in pendingRemovals
 
-          // Host removes participant2 (the second entry) – loop will encounter participant1 first (false branch)
-          host.once('room-update', () => {
-            expect(pendingRemovals.size).toBe(1); // participant2's entry was removed
-            const remaining = Array.from(pendingRemovals.values());
-            expect(remaining[0].oldSocketId).toBe(participant1Id); // participant1 still in pendingRemovals
+                  // Cancel participant1's pending grace period timer to avoid post-test async logs
+                  const p1Entry = pendingRemovals.get('pending-cid-1');
+                  if (p1Entry) {
+                    clearTimeout(p1Entry.timer);
+                    pendingRemovals.delete('pending-cid-1');
+                    rooms.get('MULTI_PENDING_ROOM').users.delete(participant1Id); // room exists as verified above
+                  }
 
-            // Cancel participant1's pending grace period timer to avoid post-test async logs
-            const p1Entry = pendingRemovals.get('pending-cid-1');
-            if (p1Entry) {
-              clearTimeout(p1Entry.timer);
-              pendingRemovals.delete('pending-cid-1');
-              rooms.get('MULTI_PENDING_ROOM').users.delete(participant1Id); // room exists as verified above
-            }
-
-            host.disconnect();
-            done();
-          });
-          host.emit('remove-participant', { roomId: 'MULTI_PENDING_ROOM', participantId: participant2Id });
-        }, 50);
+                  host.disconnect();
+                  done();
+                });
+                host.emit('remove-participant', { roomId: 'MULTI_PENDING_ROOM', participantId: participant2Id });
+              } else {
+                setTimeout(waitForBoth, 5);
+              }
+            };
+            waitForBoth();
+          } else {
+            setTimeout(waitForP1, 5);
+          }
+        };
+        waitForP1();
       }
     };
 
     host.on('room-update', checkAllJoined);
 
     host.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'Host', isObserver: false });
-    setTimeout(() => {
+    // Wait for host's room-update (confirms host joined and is creator) before participants join.
+    // Chained once-listeners guarantee the correct join order without relying on fixed timeouts.
+    host.once('room-update', () => {
       participant1.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'P1', isObserver: false, clientId: 'pending-cid-1' });
-    }, 20);
-    setTimeout(() => {
-      participant2.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'P2', isObserver: false, clientId: 'pending-cid-2' });
-    }, 40);
+      host.once('room-update', () => {
+        participant2.emit('join-room', { roomId: 'MULTI_PENDING_ROOM', userName: 'P2', isObserver: false, clientId: 'pending-cid-2' });
+      });
+    });
   }, 10000);
 });
 
@@ -2897,9 +2916,10 @@ describe('Final branch coverage', () => {
     nonHost.on('room-update', handleJoin);
 
     host.emit('join-room', { roomId: 'NONHOST_RECONNECT', userName: 'Host', isObserver: false });
-    setTimeout(() => {
+    // Wait for host's room-update (confirms host joined and is creator) before nonHost joins.
+    host.once('room-update', () => {
       nonHost.emit('join-room', { roomId: 'NONHOST_RECONNECT', userName: 'NonHost', isObserver: false, clientId: 'nonhost-reconnect-cid' });
-    }, 20);
+    });
   }, 5000);
 
   test('socket disconnect without joining a room is handled gracefully', (done) => {
