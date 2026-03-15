@@ -636,6 +636,7 @@ leaveRoomBtn.addEventListener('click', () => {
 
   welcomeScreen.classList.remove('hidden');
   votingScreen.classList.add('hidden');
+  votingScreen.classList.remove('casino-table');
   becomeHostBanner.classList.add('hidden');
   
   // Reset form
@@ -792,6 +793,13 @@ socket.on('room-update', (data) => {
     muteSoundBtn.classList.remove('hidden');
   } else {
     muteSoundBtn.classList.add('hidden');
+  }
+
+  // Apply casino table visual mode when special effects are active
+  if (specialEffectsEnabled) {
+    votingScreen.classList.add('casino-table');
+  } else {
+    votingScreen.classList.remove('casino-table');
   }
 
   // Update card deck if it changed
@@ -1037,6 +1045,7 @@ socket.on('removed-from-room', () => {
   // Return to welcome screen
   welcomeScreen.classList.remove('hidden');
   votingScreen.classList.add('hidden');
+  votingScreen.classList.remove('casino-table');
   becomeHostBanner.classList.add('hidden');
   currentRoomId = null;
   currentUserName = null;
