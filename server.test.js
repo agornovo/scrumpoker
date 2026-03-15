@@ -2074,7 +2074,7 @@ describe('Room Cleanup Interval', () => {
     expect(rooms.has('NEW_EMPTY')).toBe(true);
     expect(rooms.has('OLD_ACTIVE')).toBe(true);
 
-    clearInterval(cleanupInterval);
+    clearInterval(cleanupInterval); // stop the interval so it doesn't fire after the test
     jest.useRealTimers();
     io.close();
     server.close();
@@ -2421,7 +2421,12 @@ describe('Guard conditions and default values', () => {
     process.env.RECONNECT_GRACE_PERIOD_MS = '1234';
     process.env.HOST_TAKEOVER_TIMEOUT_MS = '5678';
     const ts = createServer();
+    // Verify all expected properties are returned (server wired up correctly using env vars)
     expect(ts.server).toBeDefined();
+    expect(ts.io).toBeDefined();
+    expect(ts.rooms).toBeInstanceOf(Map);
+    expect(ts.pendingRemovals).toBeInstanceOf(Map);
+    expect(ts.cleanupInterval).toBeDefined();
     ts.io.close();
     ts.server.close();
     clearInterval(ts.cleanupInterval);
@@ -2433,7 +2438,12 @@ describe('Guard conditions and default values', () => {
     delete process.env.RECONNECT_GRACE_PERIOD_MS;
     delete process.env.HOST_TAKEOVER_TIMEOUT_MS;
     const ts = createServer();
+    // Verify all expected properties are returned (server wired up correctly using hardcoded defaults)
     expect(ts.server).toBeDefined();
+    expect(ts.io).toBeDefined();
+    expect(ts.rooms).toBeInstanceOf(Map);
+    expect(ts.pendingRemovals).toBeInstanceOf(Map);
+    expect(ts.cleanupInterval).toBeDefined();
     ts.io.close();
     ts.server.close();
     clearInterval(ts.cleanupInterval);
@@ -2779,7 +2789,7 @@ describe('Branch coverage for remaining edge cases', () => {
             if (p1Entry) {
               clearTimeout(p1Entry.timer);
               pendingRemovals.delete('pending-cid-1');
-              rooms.get('MULTI_PENDING_ROOM')?.users.delete(participant1Id);
+              rooms.get('MULTI_PENDING_ROOM').users.delete(participant1Id); // room exists as verified above
             }
 
             host.disconnect();
