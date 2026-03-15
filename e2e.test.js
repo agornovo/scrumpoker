@@ -800,6 +800,47 @@ test.describe('Story Title', () => {
   });
 });
 
+test.describe('Special Effects – Casino Table', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(BASE_URL);
+  });
+
+  test('should apply casino-table class to voting screen when special effects are enabled', async ({ page }) => {
+    // Enable special effects before joining
+    await page.check('#special-effects');
+    await page.fill('#user-name', 'Dealer');
+    await page.click('#join-btn');
+
+    // The voting screen should carry the casino-table class
+    await expect(page.locator('#voting-screen')).toHaveClass(/casino-table/);
+  });
+
+  test('should not apply casino-table class when special effects are disabled', async ({ page }) => {
+    // Ensure special effects checkbox is unchecked (default)
+    await page.uncheck('#special-effects');
+    await page.fill('#user-name', 'Dealer');
+    await page.click('#join-btn');
+
+    // casino-table class should NOT be present
+    await expect(page.locator('#voting-screen')).not.toHaveClass(/casino-table/);
+  });
+
+  test('should remove casino-table class when leaving the room', async ({ page }) => {
+    await page.check('#special-effects');
+    await page.fill('#user-name', 'Dealer');
+    await page.click('#join-btn');
+
+    // Class is present while in the room
+    await expect(page.locator('#voting-screen')).toHaveClass(/casino-table/);
+
+    // Leave the room
+    await page.click('#leave-room');
+
+    // After leaving, the class should be removed
+    await expect(page.locator('#voting-screen')).not.toHaveClass(/casino-table/);
+  });
+});
+
 test.describe('Auto-Reveal', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BASE_URL);

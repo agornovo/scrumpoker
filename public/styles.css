@@ -1326,6 +1326,106 @@ footer .footer-link:hover {
   }
 }
 
+/* ===== Casino Table mode (active when special effects are enabled) ===== */
+
+/* Transform the participants area into a green felt poker table */
+.casino-table .participants-section {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 4px,
+      rgba(0, 0, 0, 0.025) 4px,
+      rgba(0, 0, 0, 0.025) 5px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(0, 0, 0, 0.025) 4px,
+      rgba(0, 0, 0, 0.025) 5px
+    ),
+    radial-gradient(ellipse at 50% 50%, #317a4a 0%, #1e6035 55%, #0e3a20 100%);
+  border: 8px solid #4a2c14;
+  border-radius: 50px;
+  position: relative;
+  box-shadow:
+    inset 0 0 0 3px #7a4e28,
+    inset 0 0 80px rgba(0, 0, 0, 0.2),
+    0 0 0 2px #1e0e06,
+    0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+/* Card suit symbols along the top rail of the felt */
+.casino-table .participants-section::before {
+  content: '♠  ♥  ♦  ♣';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.2rem;
+  letter-spacing: 16px;
+  color: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Card suit symbols along the bottom rail of the felt */
+.casino-table .participants-section::after {
+  content: '♣  ♦  ♥  ♠';
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.2rem;
+  letter-spacing: 16px;
+  color: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Section heading on the felt */
+.casino-table .participants-section h3 {
+  color: rgba(220, 255, 235, 0.92);
+}
+
+/* Count badge adapts to the dark felt background */
+.casino-table .count-badge {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+
+/* Participant names readable on green felt */
+.casino-table .participant-name {
+  color: rgba(210, 245, 225, 0.95);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* Host badge on the felt */
+.casino-table .participant-badge.host {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.3));
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Observers strip on the felt */
+.casino-table .observers-section {
+  border-top-color: rgba(255, 255, 255, 0.15);
+  color: rgba(195, 235, 210, 0.85);
+}
+
+.casino-table .observers-label {
+  color: rgba(200, 240, 215, 0.9);
+}
+
+.casino-table .observer-chip {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(200, 240, 215, 0.9);
+}
+
 /* === Fun Animations === */
 
 /* Participant card entrance */
