@@ -423,6 +423,14 @@ themeToggleBtn.addEventListener('click', () => {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const nextTheme = isDark ? 'light' : 'dark';
   setTheme(nextTheme);
+  // Casino table is only shown in dark theme; update the class immediately on theme change
+  if (specialEffectsEnabled) {
+    if (nextTheme === 'dark') {
+      votingScreen.classList.add('casino-table');
+    } else {
+      votingScreen.classList.remove('casino-table');
+    }
+  }
   try {
     localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
   } catch (error) {
@@ -795,8 +803,9 @@ socket.on('room-update', (data) => {
     muteSoundBtn.classList.add('hidden');
   }
 
-  // Apply casino table visual mode when special effects are active
-  if (specialEffectsEnabled) {
+  // Apply casino table visual mode when special effects are active AND dark theme is selected
+  const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (specialEffectsEnabled && isDarkTheme) {
     votingScreen.classList.add('casino-table');
   } else {
     votingScreen.classList.remove('casino-table');

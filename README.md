@@ -22,15 +22,6 @@ A real-time networked scrum poker application for agile teams to estimate user s
 ### Revealed Results
 ![Revealed Results](docs/screenshots/revealed-results.png)
 
-### Casino Table Mode (Special Effects – Light Theme)
-![Casino Table Light](docs/screenshots/casino-table-light.png)
-
-### Casino Table Mode — Card Voted (Light Theme)
-![Casino Table Voted](docs/screenshots/casino-table-voted.png)
-
-### Casino Table Mode (Special Effects – Dark Theme)
-![Casino Table Dark](docs/screenshots/casino-table-dark.png)
-
 ## Features
 
 - 🃏 **Real-time Collaboration** - Multiple users can join the same room and vote simultaneously
@@ -43,7 +34,7 @@ A real-time networked scrum poker application for agile teams to estimate user s
 - 🎨 **Color Palettes** - 8 built-in color palettes (Ocean, Forest, Sunset, Violet, Rose, Teal, Crimson, Slate)
 - 📝 **Story Title** - Host can label each round with a story title or ticket number
 - ⚡ **Auto-reveal** - Optionally reveal cards automatically once every voter has voted
-- 🎉 **Special Effects** - Optional casino poker table visual (green felt surface with dark wood rail and card-suit decorations) throughout the voting session, plus confetti, fireworks, and sound effects when the team reaches consensus
+- 🎉 **Special Effects** - Optional casino poker table visual (green felt surface with dark wood rail and card-suit decorations) throughout the voting session when dark theme is active, plus confetti, fireworks, and sound effects when the team reaches consensus
 - 📜 **Round History** - Session log of past rounds shown after each reveal
 - 🔗 **Shareable URL** - Room link auto-updates with `?room=` so you can share it directly from the address bar
 - 📘 **Estimation Help Section** - In-app guidance on usage, Fibonacci sizing, and story points
@@ -219,7 +210,7 @@ The deployment includes:
    - Either enter an existing Room ID or leave blank to create a new one
    - Optionally check "Join as Observer" to watch without voting
    - Select a **Card Set** (Standard, Fibonacci, T-Shirt Sizes, or Powers of 2) — applies when creating a new room
-   - Optionally enable **Special Effects** (casino poker table visual throughout the session, plus confetti, fireworks, and sounds on consensus) — applies when creating a new room
+   - Optionally enable **Special Effects** (casino poker table visual in dark theme throughout the session, plus confetti, fireworks, and sounds on consensus) — applies when creating a new room
    - Click "Join Room"
 
 2. **Share the Room**
