@@ -15,8 +15,8 @@ function log(...args) {
 function createServer({
   reconnectGracePeriodMs = parseInt(process.env.RECONNECT_GRACE_PERIOD_MS) || 8000,
   hostAbsentTimeoutMs = parseInt(process.env.HOST_TAKEOVER_TIMEOUT_MS) || 60000,
-  inactivityWarningMs = parseInt(process.env.INACTIVITY_WARNING_MS) || 15 * 60 * 1000,
-  inactivityCloseDelayMs = parseInt(process.env.INACTIVITY_CLOSE_DELAY_MS) || 5 * 60 * 1000
+  inactivityWarningMs = parseInt(process.env.INACTIVITY_WARNING_MS, 10) || 15 * 60 * 1000,
+  inactivityCloseDelayMs = parseInt(process.env.INACTIVITY_CLOSE_DELAY_MS, 10) || 5 * 60 * 1000
 } = {}) {
   const app = express();
   const server = http.createServer(app);

@@ -607,7 +607,7 @@ header h1 {
 
 .inactivity-warning-banner {
   background: var(--lighter-bg);
-  border: 2px solid var(--danger-color);
+  border: 2px solid var(--warning-color);
   border-radius: 8px;
   padding: 14px 20px;
   margin-bottom: 24px;
@@ -616,7 +616,7 @@ header h1 {
 
 .inactivity-warning-banner p {
   margin: 0;
-  color: var(--danger-color);
+  color: var(--warning-color);
   font-weight: 500;
 }
 
