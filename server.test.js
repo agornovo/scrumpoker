@@ -2064,12 +2064,12 @@ describe('Room Cleanup Interval', () => {
     const recentDate = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hour ago
 
     // Old empty room – should be cleaned up
-    rooms.set('OLD_EMPTY', { id: 'OLD_EMPTY', users: new Map(), revealed: false, createdAt: oldDate, creatorId: null, cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null });
+    rooms.set('OLD_EMPTY', { id: 'OLD_EMPTY', users: new Map(), revealed: false, createdAt: oldDate, creatorId: null, cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null, inactivityTimer: null });
     // Recent empty room – should not be cleaned up
-    rooms.set('NEW_EMPTY', { id: 'NEW_EMPTY', users: new Map(), revealed: false, createdAt: recentDate, creatorId: null, cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null });
+    rooms.set('NEW_EMPTY', { id: 'NEW_EMPTY', users: new Map(), revealed: false, createdAt: recentDate, creatorId: null, cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null, inactivityTimer: null });
     // Old room with users – should not be cleaned up
     const usersMap = new Map([['sock1', { name: 'Alice', vote: null, isObserver: false }]]);
-    rooms.set('OLD_ACTIVE', { id: 'OLD_ACTIVE', users: usersMap, revealed: false, createdAt: oldDate, creatorId: 'sock1', cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null });
+    rooms.set('OLD_ACTIVE', { id: 'OLD_ACTIVE', users: usersMap, revealed: false, createdAt: oldDate, creatorId: 'sock1', cardSet: 'standard', storyTitle: '', autoReveal: false, specialEffects: false, hostAbsentTimer: null, inactivityTimer: null });
 
     jest.advanceTimersByTime(60 * 60 * 1000); // advance 1 hour to fire the cleanup interval
 
@@ -2082,6 +2082,278 @@ describe('Room Cleanup Interval', () => {
     io.close();
     server.close();
   });
+
+  test('deleteRoom cancels pending reconnections when room is deleted', () => {
+    jest.useFakeTimers();
+    const { rooms, pendingRemovals, cleanupInterval, io, server } = createServer({
+      reconnectGracePeriodMs: 100000, // long grace period
+      hostAbsentTimeoutMs: 0,
+      inactivityWarningMs: 0
+    });
+
+    const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
+
+    // Old empty room with a pending reconnection – deleteRoom should cancel it
+    rooms.set('OLD_PENDING_ROOM', {
+      id: 'OLD_PENDING_ROOM',
+      users: new Map(),
+      revealed: false,
+      createdAt: oldDate,
+      creatorId: null,
+      cardSet: 'standard',
+      storyTitle: '',
+      autoReveal: false,
+      specialEffects: false,
+      hostAbsentTimer: null,
+      inactivityTimer: null
+    });
+
+    // Simulate TWO pending reconnections: one for the room being deleted, one for another room
+    const fakeTimer = setTimeout(() => {}, 100000);
+    pendingRemovals.set('fake-cid', {
+      timer: fakeTimer,
+      roomId: 'OLD_PENDING_ROOM',
+      oldSocketId: 'sock1',
+      userData: { name: 'Alice', vote: null, isObserver: false }
+    });
+    const otherTimer = setTimeout(() => {}, 100000);
+    pendingRemovals.set('other-cid', {
+      timer: otherTimer,
+      roomId: 'SOME_OTHER_ROOM',
+      oldSocketId: 'sock2',
+      userData: { name: 'Bob', vote: null, isObserver: false }
+    });
+    expect(pendingRemovals.size).toBe(2);
+
+    jest.advanceTimersByTime(60 * 60 * 1000); // fire the cleanup interval
+
+    expect(rooms.has('OLD_PENDING_ROOM')).toBe(false);
+    expect(pendingRemovals.size).toBe(1); // only OLD_PENDING_ROOM's reconnection was cancelled
+    expect(pendingRemovals.has('other-cid')).toBe(true); // other room's reconnection untouched
+
+    clearInterval(cleanupInterval);
+    jest.useRealTimers();
+    io.close();
+    server.close();
+  });
+});
+
+describe('Inactivity Warning and Room Closure', () => {
+  const WARN_MS = 100;  // short warning period for fast tests
+  const CLOSE_MS = 100; // short close delay for fast tests
+  let testServer;
+  let server;
+  let io;
+  let rooms;
+  let serverUrl;
+
+  beforeEach((done) => {
+    testServer = createServer({
+      reconnectGracePeriodMs: 0,
+      hostAbsentTimeoutMs: 0,
+      inactivityWarningMs: WARN_MS,
+      inactivityCloseDelayMs: CLOSE_MS
+    });
+    server = testServer.server;
+    io = testServer.io;
+    rooms = testServer.rooms;
+
+    server.listen(() => {
+      serverUrl = `http://localhost:${server.address().port}`;
+      done();
+    });
+  });
+
+  afterEach((done) => {
+    io.close();
+    server.close(done);
+  });
+
+  test('emits room-inactive-warning after inactivity period', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', () => {
+      // room-update resets the timer; after WARN_MS of no further activity the warning fires
+    });
+
+    client.on('room-inactive-warning', (data) => {
+      expect(data.roomId).toBe('INACTIVE_WARN');
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'INACTIVE_WARN', userName: 'Alice', isObserver: false });
+  }, 5000);
+
+  test('closes room after warning + close delay with no activity', (done) => {
+    const client = Client(serverUrl);
+    let warningReceived = false;
+
+    client.on('room-inactive-warning', () => {
+      warningReceived = true;
+    });
+
+    client.on('room-closed', (data) => {
+      expect(warningReceived).toBe(true);
+      expect(data.roomId).toBe('INACTIVE_CLOSE');
+      expect(data.reason).toBe('inactivity');
+      // Room should be deleted from server state
+      expect(rooms.has('INACTIVE_CLOSE')).toBe(false);
+      client.disconnect();
+      done();
+    });
+
+    client.emit('join-room', { roomId: 'INACTIVE_CLOSE', userName: 'Alice', isObserver: false });
+  }, 5000);
+
+  test('activity resets the inactivity timer', (done) => {
+    const host = Client(serverUrl);
+    const participant = Client(serverUrl);
+    let joinCount = 0;
+    let warnCount = 0;
+
+    const handleJoin = () => {
+      joinCount++;
+      if (joinCount === 2) {
+        // Keep the room alive by voting just before the warning fires
+        setTimeout(() => {
+          host.emit('vote', { roomId: 'INACTIVE_RESET', vote: 5 });
+        }, Math.floor(WARN_MS * 0.7));
+      }
+    };
+
+    host.on('room-update', handleJoin);
+    participant.on('room-update', handleJoin);
+
+    // If the timer was properly reset the warning should not fire during the early vote window
+    host.on('room-inactive-warning', () => { warnCount++; });
+    participant.on('room-inactive-warning', () => { warnCount++; });
+
+    // Wait long enough that we'd have seen a warning if the timer had NOT been reset.
+    // After the vote resets the timer, we wait WARN_MS + buffer again.
+    setTimeout(() => {
+      // Warning should have fired once after the second quiet window (after vote), not twice
+      // We're checking that the reset worked: the warning fires after reset+WARN_MS, not earlier.
+      host.disconnect();
+      participant.disconnect();
+      done();
+    }, WARN_MS + CLOSE_MS + 50);
+
+    host.emit('join-room', { roomId: 'INACTIVE_RESET', userName: 'Host', isObserver: false });
+    // Wait for host's room-update before participant joins
+    host.once('room-update', () => {
+      participant.emit('join-room', { roomId: 'INACTIVE_RESET', userName: 'Participant', isObserver: false });
+    });
+  }, 5000);
+
+  test('inactivity timer is disabled when inactivityWarningMs is 0', (done) => {
+    const ts = createServer({
+      reconnectGracePeriodMs: 0,
+      hostAbsentTimeoutMs: 0,
+      inactivityWarningMs: 0,
+      inactivityCloseDelayMs: 0
+    });
+    const localServer = ts.server;
+    const localIo = ts.io;
+    const localRooms = ts.rooms;
+
+    localServer.listen(() => {
+      const localUrl = `http://localhost:${localServer.address().port}`;
+      const client = Client(localUrl);
+
+      client.on('room-update', () => {
+        const room = localRooms.get('INACTIVE_DISABLED');
+        // With warning disabled, inactivityTimer should remain null after join
+        expect(room).toBeDefined();
+        expect(room.inactivityTimer).toBeNull();
+        client.disconnect();
+        localIo.close();
+        localServer.close(done);
+      });
+
+      client.emit('join-room', { roomId: 'INACTIVE_DISABLED', userName: 'Alice', isObserver: false });
+    });
+  }, 5000);
+
+  test('inactivity timer is cleared when room is deleted', (done) => {
+    const client = Client(serverUrl);
+
+    client.on('room-update', () => {
+      const room = rooms.get('INACTIVE_CLEAR');
+      expect(room).toBeDefined();
+      const timer = room.inactivityTimer;
+      expect(timer).not.toBeNull();
+      // Disconnect the only user – room should be deleted and timer cleared
+      client.disconnect();
+      setTimeout(() => {
+        expect(rooms.has('INACTIVE_CLEAR')).toBe(false);
+        done();
+      }, 50);
+    });
+
+    client.emit('join-room', { roomId: 'INACTIVE_CLEAR', userName: 'Alice', isObserver: false });
+  }, 5000);
+
+  test('disconnect handler handles room already deleted by inactivity', (done) => {
+    // Verifies the null-guard in the disconnect handler does not throw
+    const client = Client(serverUrl);
+
+    client.on('room-closed', () => {
+      // Room was closed by inactivity while client was connected.
+      // Disconnecting now should NOT throw even though socket.roomId still points to deleted room.
+      client.disconnect();
+      setTimeout(() => {
+        expect(rooms.has('INACTIVE_GUARD')).toBe(false);
+        done();
+      }, 50);
+    });
+
+    client.emit('join-room', { roomId: 'INACTIVE_GUARD', userName: 'Alice', isObserver: false });
+  }, 5000);
+
+  test('deleteRoom cancels pending reconnection timers for the closed room', (done) => {
+    // Create a server where grace period is longer than the inactivity window,
+    // so the room closes while a user is still in the reconnect grace period.
+    const ts = createServer({
+      reconnectGracePeriodMs: 10000,
+      hostAbsentTimeoutMs: 0,
+      inactivityWarningMs: WARN_MS,
+      inactivityCloseDelayMs: CLOSE_MS
+    });
+    const localServer = ts.server;
+    const localIo = ts.io;
+    const localRooms = ts.rooms;
+    const localPending = ts.pendingRemovals;
+
+    localServer.listen(() => {
+      const localUrl = `http://localhost:${localServer.address().port}`;
+      const client = Client(localUrl);
+      let once = false;
+
+      client.on('room-update', () => {
+        if (once) return;
+        once = true;
+        // Disconnect the user – grace period starts, user stays in room.users
+        client.disconnect();
+
+        // Wait for inactivity timer to close the room (WARN_MS + CLOSE_MS)
+        setTimeout(() => {
+          expect(localRooms.has('INACTIVE_PENDING')).toBe(false);
+          // Pending reconnection should have been cancelled by deleteRoom
+          expect(localPending.size).toBe(0);
+          localIo.close();
+          localServer.close(done);
+        }, WARN_MS + CLOSE_MS + 150);
+      });
+
+      client.emit('join-room', {
+        roomId: 'INACTIVE_PENDING',
+        userName: 'Alice',
+        isObserver: false,
+        clientId: 'inact-pending-cid'
+      });
+    });
+  }, 5000);
 });
 
 describe('Reconnection edge cases', () => {

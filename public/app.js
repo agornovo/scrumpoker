@@ -38,6 +38,7 @@ const roundHistorySection = document.getElementById('round-history');
 const roundHistoryList = document.getElementById('round-history-list');
 const becomeHostBanner = document.getElementById('become-host-banner');
 const becomeHostBtn = document.getElementById('become-host-btn');
+const inactivityWarningBanner = document.getElementById('inactivity-warning-banner');
 
 // Card deck definitions
 const CARD_DECKS = {
@@ -646,6 +647,7 @@ leaveRoomBtn.addEventListener('click', () => {
   votingScreen.classList.add('hidden');
   votingScreen.classList.remove('casino-table');
   becomeHostBanner.classList.add('hidden');
+  inactivityWarningBanner.classList.add('hidden');
   
   // Reset form
   roomIdInput.value = '';
@@ -788,6 +790,9 @@ resetBtn.addEventListener('click', () => {
 
 // Handle room updates
 socket.on('room-update', (data) => {
+  // Dismiss the inactivity warning banner whenever the room has activity
+  inactivityWarningBanner.classList.add('hidden');
+
   // Track revealed state
   const justRevealed = data.revealed && !wasRevealed;
   wasRevealed = data.revealed;
@@ -1082,6 +1087,43 @@ socket.on('host-absent', () => {
 becomeHostBtn.addEventListener('click', () => {
   socket.emit('claim-host', { roomId: currentRoomId });
   becomeHostBanner.classList.add('hidden');
+});
+
+// Handle inactivity warning: show banner to all room members
+socket.on('room-inactive-warning', () => {
+  inactivityWarningBanner.classList.remove('hidden');
+});
+
+// Handle room closed due to inactivity: return everyone to the welcome screen
+socket.on('room-closed', () => {
+  clearSession();
+  inactivityWarningBanner.classList.add('hidden');
+  becomeHostBanner.classList.add('hidden');
+  alert('This room has been closed due to inactivity.');
+  welcomeScreen.classList.remove('hidden');
+  votingScreen.classList.add('hidden');
+  votingScreen.classList.remove('casino-table');
+  currentRoomId = null;
+  currentUserName = null;
+  selectedVote = null;
+  roundHistory = [];
+  roundNumber = 0;
+  roundHistorySection.classList.add('hidden');
+  roundHistoryList.innerHTML = '';
+  storyTitleInput.value = '';
+  storyTitleInput.classList.add('hidden');
+  storyTitleDisplay.textContent = '';
+  storyTitleDisplay.classList.add('hidden');
+  autoRevealToggle.classList.add('hidden');
+  autoRevealCheckbox.checked = false;
+  clearCardSelection();
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url.toString());
+  } catch (e) {
+    // URL API not available
+  }
 });
 
 // Connection status
