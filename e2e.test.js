@@ -805,7 +805,11 @@ test.describe('Special Effects – Casino Table', () => {
     await page.goto(BASE_URL);
   });
 
-  test('should apply casino-table class to voting screen when special effects are enabled', async ({ page }) => {
+  test('should apply casino-table class to voting screen when special effects are enabled in dark theme', async ({ page }) => {
+    // Switch to dark theme first
+    await page.click('#theme-toggle');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
     // Enable special effects before joining
     await page.check('#special-effects');
     await page.fill('#user-name', 'Dealer');
@@ -816,6 +820,10 @@ test.describe('Special Effects – Casino Table', () => {
   });
 
   test('should not apply casino-table class when special effects are disabled', async ({ page }) => {
+    // Switch to dark theme
+    await page.click('#theme-toggle');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
     // Ensure special effects checkbox is unchecked (default)
     await page.uncheck('#special-effects');
     await page.fill('#user-name', 'Dealer');
@@ -825,7 +833,56 @@ test.describe('Special Effects – Casino Table', () => {
     await expect(page.locator('#voting-screen')).not.toHaveClass(/casino-table/);
   });
 
+  test('should not apply casino-table class when special effects are enabled but light theme is active', async ({ page }) => {
+    // Ensure light theme is active (default)
+    const currentTheme = await page.locator('html').getAttribute('data-theme');
+    if (currentTheme === 'dark') {
+      await page.click('#theme-toggle');
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // Enable special effects before joining
+    await page.check('#special-effects');
+    await page.fill('#user-name', 'Dealer');
+    await page.click('#join-btn');
+
+    // casino-table class should NOT be present in light theme
+    await expect(page.locator('#voting-screen')).not.toHaveClass(/casino-table/);
+  });
+
+  test('should toggle casino-table class when switching themes while in the room with special effects', async ({ page }) => {
+    // Start in dark theme
+    const currentTheme = await page.locator('html').getAttribute('data-theme');
+    if (currentTheme !== 'dark') {
+      await page.click('#theme-toggle');
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    // Enable special effects and join
+    await page.check('#special-effects');
+    await page.fill('#user-name', 'Dealer');
+    await page.click('#join-btn');
+
+    // Class is present in dark theme
+    await expect(page.locator('#voting-screen')).toHaveClass(/casino-table/);
+
+    // Switch to light theme — casino-table class should disappear
+    await page.click('#theme-toggle');
+    await expect(page.locator('#voting-screen')).not.toHaveClass(/casino-table/);
+
+    // Switch back to dark theme — casino-table class should reappear
+    await page.click('#theme-toggle');
+    await expect(page.locator('#voting-screen')).toHaveClass(/casino-table/);
+  });
+
   test('should remove casino-table class when leaving the room', async ({ page }) => {
+    // Switch to dark theme first
+    const currentTheme = await page.locator('html').getAttribute('data-theme');
+    if (currentTheme !== 'dark') {
+      await page.click('#theme-toggle');
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
     await page.check('#special-effects');
     await page.fill('#user-name', 'Dealer');
     await page.click('#join-btn');
