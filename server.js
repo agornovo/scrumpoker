@@ -14,7 +14,9 @@ function log(...args) {
 // Accepts optional overrides for timing constants (useful in tests).
 function createServer({
   reconnectGracePeriodMs = parseInt(process.env.RECONNECT_GRACE_PERIOD_MS) || 8000,
-  hostAbsentTimeoutMs = parseInt(process.env.HOST_TAKEOVER_TIMEOUT_MS) || 60000
+  hostAbsentTimeoutMs = parseInt(process.env.HOST_TAKEOVER_TIMEOUT_MS) || 60000,
+  inactivityWarningMs = parseInt(process.env.INACTIVITY_WARNING_MS, 10) || 15 * 60 * 1000,
+  inactivityCloseDelayMs = parseInt(process.env.INACTIVITY_CLOSE_DELAY_MS, 10) || 5 * 60 * 1000
 } = {}) {
   const app = express();
   const server = http.createServer(app);
@@ -61,8 +63,61 @@ function createServer({
   //   users: Map({ socketId: { name: string, vote: number|null, isObserver: boolean } }),
   //   revealed: boolean,
   //   createdAt: Date,
-  //   creatorId: string (socket ID of room creator)
+  //   creatorId: string (socket ID of room creator),
+  //   hostAbsentTimer: null|Timer,
+  //   inactivityTimer: null|Timer  (warning → then close timer for inactive rooms)
   // }
+
+  // Delete a room and clean up all associated resources (timers + pending reconnections).
+  function deleteRoom(roomId) {
+    const room = rooms.get(roomId);
+    /* istanbul ignore next */
+    if (!room) return;
+    clearTimeout(room.hostAbsentTimer);
+    room.hostAbsentTimer = null;
+    clearTimeout(room.inactivityTimer);
+    room.inactivityTimer = null;
+    // Cancel any pending reconnection grace-period timers for users in this room
+    for (const [cid, pending] of pendingRemovals.entries()) {
+      if (pending.roomId === roomId) {
+        clearTimeout(pending.timer);
+        pendingRemovals.delete(cid);
+      }
+    }
+    rooms.delete(roomId);
+  }
+
+  // Emit room-closed to all connected users then delete the room.
+  function closeInactiveRoom(roomId) {
+    const room = rooms.get(roomId);
+    /* istanbul ignore next */
+    if (!room) return;
+    log(`Closing inactive room ${roomId}`);
+    io.to(roomId).emit('room-closed', { roomId, reason: 'inactivity' });
+    deleteRoom(roomId);
+  }
+
+  // (Re)schedule the inactivity warning + close timers for a room.
+  // Called after any activity so the clock resets on every meaningful event.
+  function scheduleInactivityWarning(roomId) {
+    const room = rooms.get(roomId);
+    /* istanbul ignore next */
+    if (!room || room.users.size === 0) return;
+    if (inactivityWarningMs <= 0) return;
+    clearTimeout(room.inactivityTimer);
+    room.inactivityTimer = setTimeout(() => {
+      const r = rooms.get(roomId);
+      /* istanbul ignore next */
+      if (!r || r.users.size === 0) return;
+      r.inactivityTimer = null;
+      log(`Room ${roomId} inactive for ${inactivityWarningMs}ms, sending warning`);
+      io.to(roomId).emit('room-inactive-warning', { roomId });
+      // Schedule closure after additional delay
+      r.inactivityTimer = setTimeout(() => {
+        closeInactiveRoom(roomId);
+      }, inactivityCloseDelayMs);
+    }, inactivityWarningMs);
+  }
 
   io.on('connection', (socket) => {
     log('New client connected:', socket.id);
@@ -107,7 +162,7 @@ function createServer({
           if (oldRoom) {
             oldRoom.users.delete(pending.oldSocketId);
             if (oldRoom.users.size === 0) {
-              rooms.delete(pending.roomId);
+              deleteRoom(pending.roomId);
               log('Deleted empty room:', pending.roomId);
             } else {
               emitRoomUpdate(pending.roomId);
@@ -129,7 +184,8 @@ function createServer({
           storyTitle: '',
           autoReveal: false,
           specialEffects: !!specialEffects,
-          hostAbsentTimer: null
+          hostAbsentTimer: null,
+          inactivityTimer: null
         });
         log('Created room:', roomId);
       }
@@ -314,6 +370,8 @@ function createServer({
       const roomId = socket.roomId;
       if (roomId) {
         const room = rooms.get(roomId);
+        // Room may already be deleted (e.g. closed due to inactivity)
+        if (!room) return;
         const clientId = socket.clientId;
         if (clientId) {
           // Start a grace period to allow reconnection (e.g. page refresh)
@@ -326,7 +384,7 @@ function createServer({
               const wasHost = r.creatorId === oldSocketId;
               r.users.delete(oldSocketId);
               if (r.users.size === 0) {
-                rooms.delete(roomId);
+                deleteRoom(roomId);
                 log('Deleted empty room:', roomId);
               } else {
                 if (wasHost) {
@@ -347,7 +405,7 @@ function createServer({
           const wasHost = room.creatorId === socket.id;
           room.users.delete(socket.id);
           if (room.users.size === 0) {
-            rooms.delete(roomId);
+            deleteRoom(roomId);
             log('Deleted empty room:', roomId);
           } else {
             if (wasHost) {
@@ -365,6 +423,11 @@ function createServer({
 
     function emitRoomUpdate(roomId) {
       const room = rooms.get(roomId);
+      /* istanbul ignore next */
+      if (!room) return;
+
+      // Reset inactivity timer on any room activity
+      scheduleInactivityWarning(roomId);
 
       const users = Array.from(room.users.entries()).map(([socketId, user]) => ({
         id: socketId,
@@ -418,7 +481,7 @@ function createServer({
 
     rooms.forEach((room, roomId) => {
       if (now - room.createdAt > dayInMs && room.users.size === 0) {
-        rooms.delete(roomId);
+        deleteRoom(roomId);
         log('Cleaned up old room:', roomId);
       }
     });
