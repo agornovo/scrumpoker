@@ -15,15 +15,15 @@ function log(...args) {
 function createServer({
   reconnectGracePeriodMs = parseInt(process.env.RECONNECT_GRACE_PERIOD_MS) || 8000,
   hostAbsentTimeoutMs = parseInt(process.env.HOST_TAKEOVER_TIMEOUT_MS) || 60000,
-  inactivityWarningMs = parseInt(process.env.INACTIVITY_WARNING_MS, 10) || 15 * 60 * 1000,
-  inactivityCloseDelayMs = parseInt(process.env.INACTIVITY_CLOSE_DELAY_MS, 10) || 5 * 60 * 1000
+  inactivityWarningMs = parseInt(process.env.INACTIVITY_WARNING_MS, 10) || 60 * 60 * 1000,
+  inactivityCloseDelayMs = parseInt(process.env.INACTIVITY_CLOSE_DELAY_MS, 10) || 10 * 60 * 1000
 } = {}) {
   const app = express();
   const server = http.createServer(app);
   const io = socketIo(server, {
     // Configure for supporting up to 20+ users per room
     maxHttpBufferSize: 1e6, // 1MB (default, but being explicit)
-    pingTimeout: 60000, // 60 seconds (increased from default 20s for reliability)
+    pingTimeout: 90000, // 90 seconds (increased from 60s for better reliability on slow networks)
     pingInterval: 25000, // 25 seconds (default, but being explicit)
     connectTimeout: 45000, // 45 seconds (default)
     cors: {
