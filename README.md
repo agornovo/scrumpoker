@@ -45,7 +45,7 @@ A real-time networked scrum poker application for agile teams to estimate user s
 - 🏠 **Host Takeover** - If the host is absent for over a minute, remaining participants are offered the option to become the new host
 - 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
 - 🔒 **Room-based Sessions** - Private rooms with unique IDs for team privacy
-- ⏱️ **Inactivity Auto-Cleanup** - Rooms that have been idle for 15 minutes receive an in-room warning; if no activity resumes within 5 minutes the room is automatically closed and all resources freed (prevents memory leaks on long-running servers)
+- ⏱️ **Inactivity Auto-Cleanup** - Rooms that have been idle for 60 minutes receive an in-room warning; if no activity resumes within 10 minutes the room is automatically closed and all resources freed (prevents memory leaks on long-running servers)
 - 🔌 **WebSocket Communication** - Fast, real-time updates using Socket.IO
 
 ## Card Values
@@ -263,8 +263,8 @@ The app uses environment variables for configuration:
 - `PORT` - Server port (default: `8080`)
 - `RECONNECT_GRACE_PERIOD_MS` - Time (ms) a disconnected user has to reconnect before being removed (default: `8000`)
 - `HOST_TAKEOVER_TIMEOUT_MS` - Time (ms) after the host disconnects before other participants can take over (default: `60000`)
-- `INACTIVITY_WARNING_MS` - Time (ms) of room inactivity before a warning banner is shown to participants (default: `900000` = 15 minutes). Set to `0` to disable the inactivity warning and auto-close feature entirely.
-- `INACTIVITY_CLOSE_DELAY_MS` - Time (ms) after the inactivity warning before the room is automatically closed (default: `300000` = 5 minutes)
+- `INACTIVITY_WARNING_MS` - Time (ms) of room inactivity before a warning banner is shown to participants (default: `3600000` = 60 minutes). Set to `0` to disable the inactivity warning and auto-close feature entirely.
+- `INACTIVITY_CLOSE_DELAY_MS` - Time (ms) after the inactivity warning before the room is automatically closed (default: `600000` = 10 minutes)
 - `CORS_ORIGIN` - CORS origin for Socket.IO (default: `*`)
 
 ## License
